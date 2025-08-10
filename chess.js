@@ -46,14 +46,14 @@ const STANDARD_BOARD = [
 ];
 
 const CAPABLANCA_BOARD = [
-  ['bR','bN','bB','bQ','bK','bC','bA','bB','bN','bR'],
+  ['bR','bN','bA','bB','bQ','bK','bB','bC','bN','bR'],
   ['bP','bP','bP','bP','bP','bP','bP','bP','bP','bP'],
   [null,null,null,null,null,null,null,null,null,null],
   [null,null,null,null,null,null,null,null,null,null],
   [null,null,null,null,null,null,null,null,null,null],
   [null,null,null,null,null,null,null,null,null,null],
   ['wP','wP','wP','wP','wP','wP','wP','wP','wP','wP'],
-  ['wR','wN','wB','wQ','wK','wC','wA','wB','wN','wR'],
+  ['wR','wN','wA','wB','wQ','wK','wB','wC','wN','wR'],
 ];
 
 let board = [...STANDARD_BOARD.map(row => [...row])];
