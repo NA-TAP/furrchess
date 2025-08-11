@@ -27,6 +27,17 @@ h1 {
   height: fit-content;
 }
 
+#pockets {
+  width: 100%;
+}
+
+#white-pocket, #black-pocket {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
 .square {
   width: 48px;
   height: 48px;
@@ -171,3 +182,24 @@ label {
 .promotion-button:active {
   transform: scale(0.95);
 } 
+
+.action-button {
+  margin-left: 12px;
+  padding: 8px 12px;
+  font-family: 'Minecraftia', 'Press Start 2P', 'Courier New', Courier, monospace;
+  font-size: 14px;
+  border: 2px solid #3e3e3e;
+  border-radius: 4px;
+  background: #ffd1d1;
+  color: #3e3e3e;
+  cursor: pointer;
+}
+
+.action-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.action-button + .action-button {
+  background: #e0f2ff;
+}
