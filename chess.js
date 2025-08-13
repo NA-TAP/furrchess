@@ -90,6 +90,12 @@ let castling = {
 let resignedBy = null; // 'w' or 'b' when someone resigns
 
 function initializeUI() {
+  // Clear any existing game controls first
+  const existingGameControls = gameContainer.querySelector('.game-controls-wrapper');
+  if (existingGameControls) {
+    existingGameControls.remove();
+  }
+  
   // Create mode selector
   const controls = document.createElement('div');
   controls.style.cssText = 'margin: 20px 0; text-align: center;';
@@ -168,8 +174,15 @@ function initializeUI() {
   // Show/hide analysis controls based on mode
   analysisControls.style.display = analysisMode ? 'flex' : 'none';
   
+  // Update button text based on mode
+  if (newGameButton) {
+    newGameButton.textContent = analysisMode ? 'New Analysis' : 'New Game';
+    newGameButton.onclick = analysisMode ? startNewAnalysis : startNewGame;
+  }
+  
   // Insert controls before the board in the game container
   const gameControls = document.createElement('div');
+  gameControls.className = 'game-controls-wrapper';
   gameControls.style.cssText = 'margin: 20px 0; text-align: center;';
   gameControls.appendChild(controls);
   gameContainer.insertBefore(gameControls, boardElement);
@@ -197,6 +210,17 @@ function changeGameMode() {
   initializeCastlingRights();
   resignedBy = null;
   if (resignButton) resignButton.disabled = false;
+  
+  // Update analysis controls visibility and button text
+  const analysisControls = document.getElementById('analysis-controls');
+  if (analysisControls) {
+    analysisControls.style.display = analysisMode ? 'flex' : 'none';
+  }
+  
+  if (newGameButton) {
+    newGameButton.textContent = analysisMode ? 'New Analysis' : 'New Game';
+    newGameButton.onclick = analysisMode ? startNewAnalysis : startNewGame;
+  }
   
   renderBoard();
   updateStatus();

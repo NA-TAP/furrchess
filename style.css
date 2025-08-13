@@ -167,13 +167,13 @@ h1 {
 }
 
 .square.white {
-  /* Minecraft grass block style using gradients */
-  background: linear-gradient(to bottom, #7ec850 60%, #b2a06a 100%);
+  /* Cream squares */
+  background: linear-gradient(to bottom, #f5f5dc 60%, #e8e8d0 100%);
 }
 
 .square.brown {
-  /* Minecraft dirt block style using gradients */
-  background: linear-gradient(to bottom, #b2a06a 80%, #7c5a2a 100%);
+  /* Brown squares */
+  background: linear-gradient(to bottom, #8b4513 80%, #654321 100%);
 }
 
 .square.selected {
@@ -315,4 +315,16 @@ label {
 
 .action-button + .action-button {
   background: #e0f2ff;
+}
+
+/* Analysis button specific styling */
+#analysis-controls .action-button {
+  background: #ffd1d1;
+  color: #3e3e3e;
+}
+
+#analysis-controls .action-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: #f0f0f0;
 }
