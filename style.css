@@ -6,6 +6,7 @@ body {
   align-items: center;
   margin: 0;
   padding: 0;
+  min-height: 100vh;
 }
 
 h1 {
@@ -15,6 +16,118 @@ h1 {
   letter-spacing: 2px;
   color: #3e3e3e;
   text-shadow: 2px 2px 0 #b6ff6b, 4px 4px 0 #3e3e3e;
+}
+
+/* Selection Menu Styles */
+.menu-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  max-width: 800px;
+}
+
+.menu-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  width: 100%;
+  max-width: 600px;
+}
+
+.menu-item {
+  background: linear-gradient(135deg, #8b4513 0%, #a0522d 100%);
+  border: 3px solid #3e3e3e;
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-height: 120px;
+  justify-content: center;
+}
+
+.menu-item:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+  background: linear-gradient(135deg, #a0522d 0%, #cd853f 100%);
+}
+
+.menu-item:active {
+  transform: translateY(-2px);
+}
+
+.menu-icon {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.5));
+}
+
+.placeholder-icon {
+  width: 48px;
+  height: 48px;
+  background: #ccc;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: bold;
+  color: #666;
+  border: 2px solid #999;
+}
+
+.menu-text {
+  font-family: 'Minecraftia', 'Press Start 2P', 'Courier New', Courier, monospace;
+  font-size: 14px;
+  color: #fff;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+  font-weight: bold;
+}
+
+/* Game Container */
+.game-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+  max-width: 800px;
+}
+
+.game-controls {
+  display: flex;
+  gap: 15px;
+  margin-top: 10px;
+}
+
+.control-button {
+  font-family: 'Minecraftia', 'Press Start 2P', 'Courier New', Courier, monospace;
+  font-size: 14px;
+  padding: 10px 20px;
+  border: 3px solid #3e3e3e;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #ffd1d1 0%, #ffb6b6 100%);
+  color: #3e3e3e;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.control-button:hover {
+  background: linear-gradient(135deg, #ffb6b6 0%, #ff9b9b 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+}
+
+.control-button:active {
+  transform: translateY(0);
 }
 
 #chessboard {
@@ -39,8 +152,8 @@ h1 {
 }
 
 .square {
-  width: 48px;
-  height: 48px;
+  width: 60px;
+  height: 60px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -84,8 +197,8 @@ h1 {
 }
 
 .piece-img {
-  width: 40px;
-  height: 40px;
+  width: 50px;
+  height: 50px;
   object-fit: contain;
 }
 

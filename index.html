@@ -5,11 +5,49 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Furr Chess</title>
   <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="pieces/pieces.css">
 </head>
 <body>
   <h1>Furr Chess</h1>
-  <div id="chessboard"></div>
+  
+  <!-- Selection Menu -->
+  <div id="selection-menu" class="menu-container">
+    <div class="menu-grid">
+      <div class="menu-item" data-mode="play">
+        <img src="ui assets/playgame.png" alt="Play Game" class="menu-icon">
+        <span class="menu-text">Play Game</span>
+      </div>
+      <div class="menu-item" data-mode="puzzles">
+        <img src="ui assets/puzzle.png" alt="Puzzles" class="menu-icon">
+        <span class="menu-text">Play Puzzles</span>
+      </div>
+      <div class="menu-item" data-mode="analysis">
+        <img src="ui assets/analysis.png" alt="Analysis" class="menu-icon">
+        <span class="menu-text">Manual Analysis</span>
+      </div>
+      <div class="menu-item" data-mode="placeholder1">
+        <div class="menu-icon placeholder-icon">?</div>
+        <span class="menu-text">Coming Soon</span>
+      </div>
+      <div class="menu-item" data-mode="placeholder2">
+        <div class="menu-icon placeholder-icon">?</div>
+        <span class="menu-text">Coming Soon</span>
+      </div>
+      <div class="menu-item" data-mode="placeholder3">
+        <div class="menu-icon placeholder-icon">?</div>
+        <span class="menu-text">Coming Soon</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Container (hidden initially) -->
+  <div id="game-container" class="game-container" style="display: none;">
+    <div id="chessboard"></div>
+    <div class="game-controls">
+      <button id="back-to-menu" class="control-button">Back to Menu</button>
+      <button id="flip-board" class="control-button">Flip Board</button>
+    </div>
+  </div>
+
   <script src="chess.js"></script>
 </body>
 </html> 

@@ -1,8 +1,16 @@
 const boardElement = document.getElementById('chessboard');
+const selectionMenu = document.getElementById('selection-menu');
+const gameContainer = document.getElementById('game-container');
 
 // Game mode (standard, capablanca, chess960, crazyhouse)
 let gameMode = 'standard';
 let gameState = 'playing'; // 'playing', 'check', 'checkmate', 'stalemate'
+let boardFlipped = false; // Track board orientation
+
+// Analysis mode variables
+let moveHistory = []; // Array to store all moves
+let currentMoveIndex = -1; // Current position in move history (-1 = initial position)
+let analysisMode = false; // Whether we're in analysis mode
 
 // Unicode chess pieces as fallback
 const UNICODE_PIECES = {
@@ -12,25 +20,25 @@ const UNICODE_PIECES = {
   wC: '♔', wA: '♕', bC: '♚', bA: '♛', // Using similar symbols for now
 };
 
-// PNG chess pieces (with fallback to Unicode)
+// PNG chess pieces (with fallback to Unicode) - Updated paths
 const PIECES = {
-  wK: 'pieces/wK.png',
-  wQ: 'pieces/wQ.png',
-  wR: 'pieces/wR.png',
-  wB: 'pieces/wB.png',
-  wN: 'pieces/wN.png',
-  wP: 'pieces/wP.png',
-  bK: 'pieces/bK.png',
-  bQ: 'pieces/bQ.png',
-  bR: 'pieces/bR.png',
-  bB: 'pieces/bB.png',
-  bN: 'pieces/bN.png',
-  bP: 'pieces/bP.png',
+  wK: 'ui assets/pieces/wK.png',
+  wQ: 'ui assets/pieces/wQ.png',
+  wR: 'ui assets/pieces/wR.png',
+  wB: 'ui assets/pieces/wB.png',
+  wN: 'ui assets/pieces/wN.png',
+  wP: 'ui assets/pieces/wP.png',
+  bK: 'ui assets/pieces/bK.png',
+  bQ: 'ui assets/pieces/bQ.png',
+  bR: 'ui assets/pieces/bR.png',
+  bB: 'ui assets/pieces/bB.png',
+  bN: 'ui assets/pieces/bN.png',
+  bP: 'ui assets/pieces/bP.png',
   // Capablanca pieces
-  wC: 'pieces/wC.png',
-  wA: 'pieces/wA.png',
-  bC: 'pieces/bC.png',
-  bA: 'pieces/bA.png',
+  wC: 'ui assets/pieces/wC.png',
+  wA: 'ui assets/pieces/wA.png',
+  bC: 'ui assets/pieces/bC.png',
+  bA: 'ui assets/pieces/bA.png',
 };
 
 // Initial board setups
@@ -116,12 +124,12 @@ function initializeUI() {
   resignButton.onclick = onResign;
   controls.appendChild(resignButton);
 
-  // New Game button
+  // New Game/New Analysis button
   newGameButton = document.createElement('button');
   newGameButton.className = 'action-button';
-  newGameButton.textContent = 'New Game';
+  newGameButton.textContent = analysisMode ? 'New Analysis' : 'New Game';
   newGameButton.style.marginLeft = '8px';
-  newGameButton.onclick = startNewGame;
+  newGameButton.onclick = analysisMode ? startNewAnalysis : startNewGame;
   controls.appendChild(newGameButton);
 
   // Crazyhouse pockets UI
@@ -135,9 +143,36 @@ function initializeUI() {
   pocketsContainer.appendChild(whitePocket);
   pocketsContainer.appendChild(blackPocket);
   controls.appendChild(pocketsContainer);
+
+  // Analysis controls
+  const analysisControls = document.createElement('div');
+  analysisControls.id = 'analysis-controls';
+  analysisControls.style.cssText = 'display: flex; gap: 10px; justify-content: center; align-items: center; margin: 10px 0;';
   
-  // Insert controls before the board
-  boardElement.parentNode.insertBefore(controls, boardElement);
+  const backButton = document.createElement('button');
+  backButton.className = 'action-button';
+  backButton.textContent = '← Back';
+  backButton.onclick = goBack;
+  backButton.disabled = true;
+  
+  const forwardButton = document.createElement('button');
+  forwardButton.className = 'action-button';
+  forwardButton.textContent = 'Forward →';
+  forwardButton.onclick = goForward;
+  forwardButton.disabled = true;
+  
+  analysisControls.appendChild(backButton);
+  analysisControls.appendChild(forwardButton);
+  controls.appendChild(analysisControls);
+  
+  // Show/hide analysis controls based on mode
+  analysisControls.style.display = analysisMode ? 'flex' : 'none';
+  
+  // Insert controls before the board in the game container
+  const gameControls = document.createElement('div');
+  gameControls.style.cssText = 'margin: 20px 0; text-align: center;';
+  gameControls.appendChild(controls);
+  gameContainer.insertBefore(gameControls, boardElement);
 }
 
 function changeGameMode() {
@@ -171,22 +206,38 @@ function changeGameMode() {
 function updateStatus() {
   if (gameState === 'checkmate') {
     const winner = currentPlayer === 'w' ? 'Black' : 'White';
-    statusDisplay.textContent = `Checkmate! ${winner} wins!`;
+    if (analysisMode) {
+      statusDisplay.textContent = `Checkmate! ${winner} wins! - Analyse Manually`;
+    } else {
+      statusDisplay.textContent = `Checkmate! ${winner} wins!`;
+    }
     statusDisplay.style.color = '#ff4444';
     if (resignButton) resignButton.disabled = true;
   } else if (gameState === 'stalemate') {
-    statusDisplay.textContent = 'Stalemate!';
+    if (analysisMode) {
+      statusDisplay.textContent = 'Stalemate! - Analyse Manually';
+    } else {
+      statusDisplay.textContent = 'Stalemate!';
+    }
     statusDisplay.style.color = '#ffaa00';
     if (resignButton) resignButton.disabled = true;
   } else if (gameState === 'resigned') {
     const loser = resignedBy === 'w' ? 'White' : 'Black';
     const winner = resignedBy === 'w' ? 'Black' : 'White';
-    statusDisplay.textContent = `${loser} resigns. ${winner} wins!`;
+    if (analysisMode) {
+      statusDisplay.textContent = `${loser} resigns. ${winner} wins! - Analyse Manually`;
+    } else {
+      statusDisplay.textContent = `${loser} resigns. ${winner} wins!`;
+    }
     statusDisplay.style.color = '#ff4444';
     if (resignButton) resignButton.disabled = true;
   } else if (gameState === 'giveaway_win') {
     const winner = currentPlayer === 'w' ? 'White' : 'Black';
-    statusDisplay.textContent = `Giveaway: ${winner} wins!`;
+    if (analysisMode) {
+      statusDisplay.textContent = `Giveaway: ${winner} wins! - Analyse Manually`;
+    } else {
+      statusDisplay.textContent = `Giveaway: ${winner} wins!`;
+    }
     statusDisplay.style.color = '#ff4444';
     if (resignButton) resignButton.disabled = true;
   } else if (gameState === 'check') {
@@ -200,64 +251,7 @@ function updateStatus() {
   }
 }
 
-function renderBoard() {
-  boardElement.innerHTML = '';
-  const rows = 8; // Both modes have 8 ranks
-  const cols = gameMode === 'capablanca' ? 10 : 8; // Capablanca has 10 files
-  
-  // Update grid template to match board size
-  boardElement.style.gridTemplateColumns = `repeat(${cols}, 48px)`;
-  boardElement.style.gridTemplateRows = `repeat(${rows}, 48px)`;
-  
-  for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < cols; col++) {
-      const square = document.createElement('div');
-      square.className = 'square ' + ((row + col) % 2 === 0 ? 'white' : 'brown');
-      square.dataset.row = row;
-      square.dataset.col = col;
-      
-      if (selected && selected.row === row && selected.col === col) {
-        square.classList.add('selected');
-      }
-      
-      if (selected && isLegalMove(selected, {row, col})) {
-        square.classList.add('move-option');
-      }
 
-      // Highlight crazyhouse drop options
-      if (!selected && gameMode === 'crazyhouse' && dropSelection && isLegalDrop({ row, col })) {
-        square.classList.add('move-option');
-      }
-      
-      // Highlight king in check
-      if (gameState === 'check' || gameState === 'checkmate') {
-        const kingPos = findKing(currentPlayer);
-        if (kingPos && kingPos.row === row && kingPos.col === col) {
-          square.classList.add('in-check');
-        }
-      }
-      
-      const piece = board[row][col];
-      if (piece) {
-        const img = document.createElement('img');
-        img.src = PIECES[piece];
-        img.alt = piece;
-        img.className = 'piece-img';
-        img.onerror = function() {
-          this.style.display = 'none';
-          const unicodeSpan = document.createElement('span');
-          unicodeSpan.textContent = UNICODE_PIECES[piece] || piece[1];
-          unicodeSpan.className = 'piece-unicode';
-          this.parentNode.appendChild(unicodeSpan);
-        };
-        square.appendChild(img);
-      }
-      
-      square.addEventListener('click', () => onSquareClick(row, col));
-      boardElement.appendChild(square);
-    }
-  }
-}
 
 function onSquareClick(row, col) {
   if (gameState === 'checkmate' || gameState === 'stalemate' || gameState === 'resigned') return;
@@ -284,6 +278,7 @@ function onSquareClick(row, col) {
       currentPlayer = currentPlayer === 'w' ? 'b' : 'w';
       lastMove = { from: null, to: { row, col }, drop: true };
       checkGameState();
+      if (analysisMode) saveCurrentPosition();
       renderBoard();
       updateStatus();
       renderPockets();
@@ -320,6 +315,7 @@ function onSquareClick(row, col) {
       
       // Check game state
       checkGameState();
+      if (analysisMode) saveCurrentPosition();
       renderBoard();
       updateStatus();
       renderPockets();
@@ -413,6 +409,7 @@ function showPromotionDialog(square, piece) {
       selected = null;
       
       checkGameState();
+      if (analysisMode) saveCurrentPosition();
       renderBoard();
       updateStatus();
     };
@@ -632,12 +629,8 @@ function checkGameState() {
   }
 }
 
-// Initialize the game
-initializeUI();
-initializeCastlingRights();
-renderBoard();
-updateStatus();
-renderPockets();
+// Initialize the menu system instead of the game directly
+initializeMenu();
 
 // ----- Helpers: Crazyhouse -----
 function renderPockets() {
@@ -783,6 +776,7 @@ function performCastle(color, side) {
   currentPlayer = currentPlayer === 'w' ? 'b' : 'w';
   lastMove = { from: { row, col: info.kingStart.col }, to: { row, col: kingDestCol }, castle: side };
   checkGameState();
+  if (analysisMode) saveCurrentPosition();
   renderBoard();
   updateStatus();
 }
@@ -955,6 +949,35 @@ function startNewGame() {
   renderPockets();
 }
 
+function startNewAnalysis() {
+  // Reset to initial position for analysis
+  if (gameMode === 'capablanca') {
+    board = [...CAPABLANCA_BOARD.map(row => [...row])];
+  } else if (gameMode === 'chess960') {
+    board = generateChess960Board();
+  } else {
+    board = [...STANDARD_BOARD.map(row => [...row])];
+  }
+  currentPlayer = 'w';
+  selected = null;
+  lastMove = null;
+  gameState = 'playing';
+  dropSelection = null;
+  pockets = { w: [], b: [] };
+  resignedBy = null;
+  if (resignButton) resignButton.disabled = false;
+  initializeCastlingRights();
+  
+  // Reset analysis variables
+  moveHistory = [];
+  currentMoveIndex = -1;
+  
+  renderBoard();
+  updateStatus();
+  renderPockets();
+  updateAnalysisControls();
+}
+
 // ----- Giveaway utilities -----
 function countPieces(color) {
   const rows = 8;
@@ -986,4 +1009,242 @@ function hasAnyCapture(color) {
     }
   }
   return false;
+}
+
+// ----- Menu and Navigation Functions -----
+function initializeMenu() {
+  // Add click handlers to menu items
+  const menuItems = document.querySelectorAll('.menu-item');
+  menuItems.forEach(item => {
+    item.addEventListener('click', () => {
+      const mode = item.dataset.mode;
+      handleMenuSelection(mode);
+    });
+  });
+
+  // Add click handlers to game controls
+  const backToMenuBtn = document.getElementById('back-to-menu');
+  const flipBoardBtn = document.getElementById('flip-board');
+  
+  backToMenuBtn.addEventListener('click', showMenu);
+  flipBoardBtn.addEventListener('click', flipBoard);
+}
+
+function handleMenuSelection(mode) {
+  switch(mode) {
+    case 'play':
+      startGame('standard');
+      break;
+    case 'puzzles':
+      // TODO: Implement puzzles with FEN
+      alert('Puzzles feature coming soon!');
+      break;
+    case 'analysis':
+      startGame('analysis');
+      break;
+    case 'placeholder1':
+    case 'placeholder2':
+    case 'placeholder3':
+      alert('This feature is coming soon!');
+      break;
+  }
+}
+
+function startGame(mode) {
+  gameMode = mode;
+  boardFlipped = false;
+  
+  // Set analysis mode
+  analysisMode = (mode === 'analysis');
+  
+  // Initialize game state
+  if (gameMode === 'capablanca') {
+    board = [...CAPABLANCA_BOARD.map(row => [...row])];
+  } else if (gameMode === 'chess960') {
+    board = generateChess960Board();
+  } else {
+    board = [...STANDARD_BOARD.map(row => [...row])];
+  }
+  
+  currentPlayer = 'w';
+  selected = null;
+  lastMove = null;
+  gameState = 'playing';
+  dropSelection = null;
+  pockets = { w: [], b: [] };
+  initializeCastlingRights();
+  resignedBy = null;
+  
+  // Reset analysis variables
+  moveHistory = [];
+  currentMoveIndex = -1;
+  
+  // Show game container and hide menu
+  selectionMenu.style.display = 'none';
+  gameContainer.style.display = 'flex';
+  
+  // Initialize UI and render
+  initializeUI();
+  renderBoard();
+  updateStatus();
+  renderPockets();
+}
+
+function showMenu() {
+  selectionMenu.style.display = 'flex';
+  gameContainer.style.display = 'none';
+}
+
+function flipBoard() {
+  boardFlipped = !boardFlipped;
+  renderBoard();
+}
+
+// Analysis functions
+function goBack() {
+  if (currentMoveIndex > -1) {
+    currentMoveIndex--;
+    restorePosition();
+  }
+  updateAnalysisControls();
+}
+
+function goForward() {
+  if (currentMoveIndex < moveHistory.length - 1) {
+    currentMoveIndex++;
+    restorePosition();
+  }
+  updateAnalysisControls();
+}
+
+function updateAnalysisControls() {
+  const backButton = document.querySelector('#analysis-controls button:first-child');
+  const forwardButton = document.querySelector('#analysis-controls button:last-child');
+  
+  if (backButton && forwardButton) {
+    backButton.disabled = currentMoveIndex <= -1;
+    forwardButton.disabled = currentMoveIndex >= moveHistory.length - 1;
+  }
+}
+
+function restorePosition() {
+  if (currentMoveIndex === -1) {
+    // Restore initial position
+    if (gameMode === 'capablanca') {
+      board = [...CAPABLANCA_BOARD.map(row => [...row])];
+    } else if (gameMode === 'chess960') {
+      board = generateChess960Board();
+    } else {
+      board = [...STANDARD_BOARD.map(row => [...row])];
+    }
+    currentPlayer = 'w';
+    selected = null;
+    lastMove = null;
+    gameState = 'playing';
+    dropSelection = null;
+    pockets = { w: [], b: [] };
+    initializeCastlingRights();
+    resignedBy = null;
+  } else {
+    // Restore to specific move
+    const moveData = moveHistory[currentMoveIndex];
+    board = moveData.board.map(row => [...row]);
+    currentPlayer = moveData.currentPlayer;
+    selected = null;
+    lastMove = moveData.lastMove;
+    gameState = moveData.gameState;
+    dropSelection = moveData.dropSelection;
+    pockets = { ...moveData.pockets };
+    castling = { ...moveData.castling };
+    resignedBy = moveData.resignedBy;
+  }
+  
+  renderBoard();
+  updateStatus();
+  renderPockets();
+}
+
+function saveCurrentPosition() {
+  const positionData = {
+    board: board.map(row => [...row]),
+    currentPlayer: currentPlayer,
+    lastMove: lastMove,
+    gameState: gameState,
+    dropSelection: dropSelection,
+    pockets: { ...pockets },
+    castling: { ...castling },
+    resignedBy: resignedBy
+  };
+  
+  // Remove any moves after current index
+  moveHistory = moveHistory.slice(0, currentMoveIndex + 1);
+  moveHistory.push(positionData);
+  currentMoveIndex = moveHistory.length - 1;
+  
+  updateAnalysisControls();
+}
+
+// Update renderBoard to handle flipped orientation
+function renderBoard() {
+  boardElement.innerHTML = '';
+  const rows = 8; // Both modes have 8 ranks
+  const cols = gameMode === 'capablanca' ? 10 : 8; // Capablanca has 10 files
+  
+  // Update grid template to match board size
+  boardElement.style.gridTemplateColumns = `repeat(${cols}, 60px)`;
+  boardElement.style.gridTemplateRows = `repeat(${rows}, 60px)`;
+  
+  for (let displayRow = 0; displayRow < rows; displayRow++) {
+    for (let displayCol = 0; displayCol < cols; displayCol++) {
+      const square = document.createElement('div');
+      
+      // Convert display coordinates to logical coordinates
+      const row = boardFlipped ? (rows - 1 - displayRow) : displayRow;
+      const col = boardFlipped ? (cols - 1 - displayCol) : displayCol;
+      
+      square.className = 'square ' + ((displayRow + displayCol) % 2 === 0 ? 'white' : 'brown');
+      square.dataset.row = row;
+      square.dataset.col = col;
+      
+      if (selected && selected.row === row && selected.col === col) {
+        square.classList.add('selected');
+      }
+      
+      if (selected && isLegalMove(selected, {row, col})) {
+        square.classList.add('move-option');
+      }
+
+      // Highlight crazyhouse drop options
+      if (!selected && gameMode === 'crazyhouse' && dropSelection && isLegalDrop({ row, col })) {
+        square.classList.add('move-option');
+      }
+      
+      // Highlight king in check
+      if (gameState === 'check' || gameState === 'checkmate') {
+        const kingPos = findKing(currentPlayer);
+        if (kingPos && kingPos.row === row && kingPos.col === col) {
+          square.classList.add('in-check');
+        }
+      }
+      
+      const piece = board[row][col];
+      if (piece) {
+        const img = document.createElement('img');
+        img.src = PIECES[piece];
+        img.alt = piece;
+        img.className = 'piece-img';
+        img.onerror = function() {
+          this.style.display = 'none';
+          const unicodeSpan = document.createElement('span');
+          unicodeSpan.textContent = UNICODE_PIECES[piece] || piece[1];
+          unicodeSpan.className = 'piece-unicode';
+          this.parentNode.appendChild(unicodeSpan);
+        };
+        square.appendChild(img);
+      }
+      
+      square.addEventListener('click', () => onSquareClick(row, col));
+      boardElement.appendChild(square);
+    }
+  }
 }
