@@ -7,6 +7,8 @@ let gameMode = 'standard';
 let gameState = 'playing'; // 'playing', 'check', 'checkmate', 'stalemate'
 let boardFlipped = false; // Track board orientation
 let botMode = false; // If true, Black is controlled by a random bot
+let winSound = null; // applause sound
+let winSoundPlayed = false; // ensure single play per game end
 
 // Analysis mode variables
 let moveHistory = []; // Array to store all moves
@@ -21,6 +23,8 @@ const UNICODE_PIECES = {
   wC: '♔', wA: '♕', bC: '♚', bA: '♛', // Using similar symbols for now
   // Berolina pawns (using inverted pawn symbols)
   wS: '♟', bS: '♙',
+  // Knightmate non-royal kings (fallback to king glyphs)
+  wM: '♔', bM: '♚',
 };
 
 // PNG chess pieces (with fallback to Unicode) - Updated paths
@@ -45,6 +49,9 @@ const PIECES = {
   // Berolina pawns
   wS: 'ui assets/pieces/wS.png',
   bS: 'ui assets/pieces/bS.png',
+  // Knightmate non-royal kings
+  wM: 'ui assets/pieces/wM.png',
+  bM: 'ui assets/pieces/bM.png',
 };
 
 // Initial board setups
@@ -85,6 +92,7 @@ let board = [...STANDARD_BOARD.map(row => [...row])];
 let selected = null;
 let currentPlayer = 'w';
 let lastMove = null;
+let enPassantTarget = null; // { row, col } square that can be captured en passant this turn
 
 // UI elements
 let modeSelector = null;
@@ -125,6 +133,8 @@ function initializeUI() {
     <option value="crazyhouse">Crazyhouse</option>
     <option value="giveaway">Antichess</option>
     <option value="berolina">Berolina Chess</option>
+    <option value="knightmate">Knightmate</option>
+    <option value="atomic">Atomic</option>
   `;
   modeSelector.addEventListener('change', changeGameMode);
   
@@ -214,6 +224,16 @@ function changeGameMode() {
     board = generateChess960Board();
   } else if (gameMode === 'giveaway') {
     board = [...STANDARD_BOARD.map(row => [...row])];
+  } else if (gameMode === 'knightmate') {
+    board = [...STANDARD_BOARD.map(row => [...row])];
+    // Swap kings with royal knights: knights become royal kings (keep 'N' code as royal),
+    // original kings become non-royal 'M'.
+    board[7][4] = 'wN';
+    board[7][1] = 'wM';
+    board[7][6] = 'wM';
+    board[0][4] = 'bN';
+    board[0][1] = 'bM';
+    board[0][6] = 'bM';
   } else if (gameMode === 'berolina') {
     board = [...BEROLINA_BOARD.map(row => [...row])];
   } else {
@@ -224,11 +244,13 @@ function changeGameMode() {
   currentPlayer = 'w';
   selected = null;
   lastMove = null;
+  enPassantTarget = null;
   gameState = 'playing';
   dropSelection = null;
   pockets = { w: [], b: [] };
   initializeCastlingRights();
   resignedBy = null;
+  winSoundPlayed = false;
   if (resignButton) resignButton.disabled = false;
   
   // Update analysis controls visibility and button text
@@ -257,6 +279,7 @@ function updateStatus() {
     }
     statusDisplay.style.color = '#ff4444';
     if (resignButton) resignButton.disabled = true;
+    if (!analysisMode && !winSoundPlayed && winSound) { try { winSound.currentTime = 0; winSound.play(); } catch(e) {} winSoundPlayed = true; }
   } else if (gameState === 'stalemate') {
     if (analysisMode) {
       statusDisplay.textContent = 'Stalemate! - Analyse Manually';
@@ -275,6 +298,7 @@ function updateStatus() {
     }
     statusDisplay.style.color = '#ff4444';
     if (resignButton) resignButton.disabled = true;
+    if (!analysisMode && !winSoundPlayed && winSound) { try { winSound.currentTime = 0; winSound.play(); } catch(e) {} winSoundPlayed = true; }
   } else if (gameState === 'giveaway_win') {
     const winner = currentPlayer === 'w' ? 'White' : 'Black';
     if (analysisMode) {
@@ -284,6 +308,7 @@ function updateStatus() {
     }
     statusDisplay.style.color = '#ff4444';
     if (resignButton) resignButton.disabled = true;
+    if (!analysisMode && !winSoundPlayed && winSound) { try { winSound.currentTime = 0; winSound.play(); } catch(e) {} winSoundPlayed = true; }
   } else if (gameState === 'check') {
     const turnLabel = (botMode && currentPlayer === 'b') ? "Bot's" : (currentPlayer === 'w' ? 'White' : 'Black');
     statusDisplay.textContent = `${turnLabel}'s turn - CHECK!`;
@@ -411,14 +436,94 @@ function movePiece(from, to) {
   }
   
   // Make the move
-  board[to.row][to.col] = piece;
-  board[from.row][from.col] = null;
+  // En passant capture execution for regular pawns
+  let enPassantCaptured = null;
+  if (piece[1] === 'P' && enPassantTarget && to.row === enPassantTarget.row && to.col === enPassantTarget.col && !target) {
+    const dir = piece[0] === 'w' ? 1 : -1; // captured pawn sits behind target square
+    const capturedRow = to.row + dir;
+    enPassantCaptured = board[capturedRow][to.col];
+    board[capturedRow][to.col] = null;
+    board[to.row][to.col] = piece;
+    board[from.row][from.col] = null;
+  } else {
+    board[to.row][to.col] = piece;
+    board[from.row][from.col] = null;
+  }
 
   // Update castling rights if king or rook moves/captured
   updateCastlingRightsAfterMove(piece, from, to);
   if (target) updateCastlingRightsAfterCapture(target, to);
+  if (enPassantCaptured) updateCastlingRightsAfterCapture(enPassantCaptured, { row: to.row + (piece[0] === 'w' ? 1 : -1), col: to.col });
+
+  // Crazyhouse: captured piece from en passant goes to pocket
+  if (enPassantCaptured && gameMode === 'crazyhouse') {
+    pockets[piece[0]].push(enPassantCaptured[1]);
+  }
+
+  // Giveaway: treat en passant as a capture for legality already handled elsewhere
   
+  // Set/clear en passant target
+  enPassantTarget = null;
+  if (piece[1] === 'P') {
+    const dir = piece[0] === 'w' ? -1 : 1;
+    const startRow = piece[0] === 'w' ? 6 : 1;
+    if (from.row === startRow && to.row === from.row + 2 * dir && from.col === to.col) {
+      enPassantTarget = { row: from.row + dir, col: from.col };
+    }
+  }
+
+  // Atomic: explosion on captures (target square or en passant captured pawn square)
+  if (gameMode === 'atomic' && (target || enPassantCaptured)) {
+    const center = enPassantCaptured
+      ? { row: to.row + (piece[0] === 'w' ? 1 : -1), col: to.col }
+      : { row: to.row, col: to.col };
+    triggerAtomicExplosion(center, piece[0]);
+  }
+
   return { needsPromotion: false };
+}
+
+function triggerAtomicExplosion(center, moverColor) {
+  const rows = 8;
+  const cols = gameMode === 'capablanca' ? 10 : 8;
+  const adjDeltas = [
+    {dr: 1, dc: 0}, {dr: -1, dc: 0}, {dr: 0, dc: 1}, {dr: 0, dc: -1},
+    {dr: 1, dc: 1}, {dr: 1, dc: -1}, {dr: -1, dc: 1}, {dr: -1, dc: -1}
+  ];
+  const toRemove = [];
+  let royalRemoved = false;
+
+  // Always remove the center square occupant (capturing piece now occupies center for normal captures)
+  if (center.row >= 0 && center.row < rows && center.col >= 0 && center.col < cols) {
+    const pCenter = board[center.row][center.col];
+    if (pCenter) {
+      const isRoyalCenter = (gameMode === 'knightmate') ? (pCenter[1] === 'N') : (pCenter[1] === 'K');
+      if (isRoyalCenter) royalRemoved = true;
+      toRemove.push({ r: center.row, c: center.col, p: pCenter });
+    }
+  }
+
+  // Adjacent squares: remove non-pawns only
+  adjDeltas.forEach(d => {
+    const r = center.row + d.dr;
+    const c = center.col + d.dc;
+    if (r < 0 || r >= rows || c < 0 || c >= cols) return;
+    const p = board[r][c];
+    if (!p) return;
+    if (p[1] === 'P' || p[1] === 'S') return;
+    toRemove.push({ r, c, p });
+  });
+  toRemove.forEach(({r, c, p}) => {
+    // Track royal removal (king in normal, knight in knightmate)
+    const color = p[0];
+    const isRoyal = (gameMode === 'knightmate') ? (p[1] === 'N') : (p[1] === 'K');
+    if (isRoyal) royalRemoved = true;
+    board[r][c] = null;
+  });
+  if (royalRemoved) {
+    // End the game immediately, winner is the side that just moved
+    gameState = 'checkmate';
+  }
 }
 
 function showPromotionDialog(square, piece) {
@@ -506,11 +611,14 @@ function isLegalMove(from, to) {
       break;
     case 'K': // King
       isValidMove = Math.abs(dr) <= 1 && Math.abs(dc) <= 1;
-      // Castling attempt (standard and Chess960; not in giveaway or crazyhouse)
-      if (!isValidMove && gameMode !== 'capablanca' && gameMode !== 'giveaway') {
+      // Castling attempt (standard and Chess960; not in giveaway, crazyhouse, or knightmate)
+      if (!isValidMove && gameMode !== 'capablanca' && gameMode !== 'giveaway' && gameMode !== 'knightmate') {
         const side = detectCastlingSide(piece[0], from, to);
         if (side && isCastlingLegal(piece[0], side)) isValidMove = true;
       }
+      break;
+    case 'M': // Knightmate non-royal king moves like a king (no castling)
+      isValidMove = Math.max(Math.abs(dr), Math.abs(dc)) === 1;
       break;
     case 'C': // Chancellor (Rook + Knight)
       isValidMove = isValidChancellorMove(from, to);
@@ -529,8 +637,11 @@ function isLegalMove(from, to) {
     return true;
   }
   
-  // Check if move would leave king in check (regular modes)
-  return !wouldLeaveKingInCheck(from, to);
+  // Atomic: kings cannot capture; and you may move into "attacked" squares if explosion removes threats.
+  if (gameMode === 'atomic' && piece[1] === 'K' && board[to.row][to.col]) return false;
+  
+  // Check if move would leave royal piece in check (regular modes)
+  return !wouldLeaveRoyalInCheck(from, to);
 }
 
 function isValidPawnMove(from, to, piece) {
@@ -574,6 +685,11 @@ function isValidPawnMove(from, to, piece) {
     
     // Capture move
     if (Math.abs(dc) === 1 && dr === dir && target && target[0] !== piece[0]) return true;
+
+    // En passant capture
+    if (Math.abs(dc) === 1 && dr === dir && !target && enPassantTarget && enPassantTarget.row === to.row && enPassantTarget.col === to.col) {
+      return true;
+    }
   }
   
   return false;
@@ -620,42 +736,91 @@ function isPathClear(from, to) {
   return true;
 }
 
-function wouldLeaveKingInCheck(from, to) {
+function wouldLeaveRoyalInCheck(from, to) {
   // Make temporary move
-  const tempPiece = board[to.row][to.col];
-  board[to.row][to.col] = board[from.row][from.col];
+  const movingPiece = board[from.row][from.col];
+  const originalTarget = board[to.row][to.col];
+  let capturedEnPassantPiece = null;
+  let capturedEnPassantPos = null;
+
+  // Apply temporary move (handle en passant)
+  board[to.row][to.col] = movingPiece;
   board[from.row][from.col] = null;
-  
-  // Check if king is in check
-  const inCheck = isKingInCheck(currentPlayer);
-  
-  // Undo move
+  if (movingPiece && movingPiece[1] === 'P' && enPassantTarget && !originalTarget && enPassantTarget.row === to.row && enPassantTarget.col === to.col) {
+    const dirBack = movingPiece[0] === 'w' ? 1 : -1;
+    capturedEnPassantPos = { row: to.row + dirBack, col: to.col };
+    capturedEnPassantPiece = board[capturedEnPassantPos.row][capturedEnPassantPos.col];
+    board[capturedEnPassantPos.row][capturedEnPassantPos.col] = null;
+  }
+
+  // For Atomic: simulate explosion after captures
+  const removedSquares = [];
+  if (gameMode === 'atomic' && (originalTarget || capturedEnPassantPiece)) {
+    const rows = 8;
+    const cols = gameMode === 'capablanca' ? 10 : 8;
+    const deltas = [
+      {dr: 0, dc: 0}, {dr: 1, dc: 0}, {dr: -1, dc: 0}, {dr: 0, dc: 1}, {dr: 0, dc: -1},
+      {dr: 1, dc: 1}, {dr: 1, dc: -1}, {dr: -1, dc: 1}, {dr: -1, dc: -1}
+    ];
+    deltas.forEach(d => {
+      const r = to.row + d.dr;
+      const c = to.col + d.dc;
+      if (r < 0 || r >= rows || c < 0 || c >= cols) return;
+      const p = board[r][c];
+      if (!p) return;
+      if (p[1] === 'P' || p[1] === 'S') return;
+      removedSquares.push({ r, c, p });
+      board[r][c] = null;
+    });
+  }
+
+  // Check if current side's royal piece is in check after simulation
+  const inCheck = isRoyalInCheck(currentPlayer);
+
+  // Undo explosion removals
+  for (let i = 0; i < removedSquares.length; i++) {
+    const { r, c, p } = removedSquares[i];
+    board[r][c] = p;
+  }
+
+  // Undo move and en passant
+  if (capturedEnPassantPiece && capturedEnPassantPos) {
+    board[capturedEnPassantPos.row][capturedEnPassantPos.col] = capturedEnPassantPiece;
+  }
   board[from.row][from.col] = board[to.row][to.col];
-  board[to.row][to.col] = tempPiece;
-  
+  board[to.row][to.col] = originalTarget;
+
   return inCheck;
 }
 
-function isKingInCheck(color) {
-  const kingPos = findKing(color);
-  if (!kingPos) return false;
+function isRoyalInCheck(color) {
+  const royalPos = findRoyal(color);
+  if (!royalPos) return false;
   const opponentColor = color === 'w' ? 'b' : 'w';
-  return isSquareAttackedBy(kingPos, opponentColor);
+  return isSquareAttackedBy(royalPos, opponentColor);
 }
 
-function findKing(color) {
+// Backwards-compatible wrappers for existing code paths
+function isKingInCheck(color) { return isRoyalInCheck(color); }
+
+function findRoyal(color) {
   const rows = 8;
   const cols = gameMode === 'capablanca' ? 10 : 8;
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
       const piece = board[row][col];
-      if (piece === color + 'K') {
-        return {row, col};
+      if (gameMode === 'knightmate') {
+        if (piece === color + 'N') return { row, col };
+      } else {
+        if (piece === color + 'K') return { row, col };
       }
     }
   }
   return null;
 }
+
+// Backwards-compatible wrapper used in UI highlights
+function findKing(color) { return findRoyal(color); }
 
 function hasLegalMoves(color) {
   const rows = 8;
@@ -680,6 +845,18 @@ function hasLegalMoves(color) {
 }
 
 function checkGameState() {
+  // If an earlier action already decided the game (e.g., Atomic explosion), don't override
+  if (gameMode === 'atomic' && gameState === 'checkmate') return;
+
+  // Atomic: if either side has no royal piece on the board, the game ends immediately
+  if (gameMode === 'atomic') {
+    const whiteHasRoyal = !!findRoyal('w');
+    const blackHasRoyal = !!findRoyal('b');
+    if (!whiteHasRoyal || !blackHasRoyal) {
+      gameState = 'checkmate';
+      return;
+    }
+  }
   if (gameMode === 'giveaway') {
     if (countPieces(currentPlayer) === 0) {
       gameState = 'giveaway_win';
@@ -690,7 +867,7 @@ function checkGameState() {
     }
     return;
   }
-  if (isKingInCheck(currentPlayer)) {
+  if (isRoyalInCheck(currentPlayer)) {
     if (hasLegalMoves(currentPlayer)) {
       gameState = 'check';
     } else {
@@ -888,6 +1065,7 @@ function isSquareAttackedBy(square, byColor) {
     for (let c = 0; c < cols; c++) {
       const p = board[r][c];
       if (!p || p[0] !== byColor) continue;
+      if (gameMode === 'atomic' && (square.row === r && square.col === c)) continue; // cannot attack own square
       if (canPieceAttackSquare({ row: r, col: c }, square, p)) return true;
     }
   }
@@ -1018,15 +1196,26 @@ function startNewGame() {
   } else {
     board = [...STANDARD_BOARD.map(row => [...row])];
   }
+  if (gameMode === 'knightmate') {
+    // Apply Knightmate swaps after base setup (standard-like)
+    board[7][4] = 'wN';
+    board[7][1] = 'wM';
+    board[7][6] = 'wM';
+    board[0][4] = 'bN';
+    board[0][1] = 'bM';
+    board[0][6] = 'bM';
+  }
   currentPlayer = 'w';
   selected = null;
   lastMove = null;
+  enPassantTarget = null;
   gameState = 'playing';
   dropSelection = null;
   pockets = { w: [], b: [] };
   resignedBy = null;
   if (resignButton) resignButton.disabled = false;
   initializeCastlingRights();
+  winSoundPlayed = false;
   renderBoard();
   updateStatus();
   renderPockets();
@@ -1047,6 +1236,7 @@ function startNewAnalysis() {
   currentPlayer = 'w';
   selected = null;
   lastMove = null;
+  enPassantTarget = null;
   gameState = 'playing';
   dropSelection = null;
   pockets = { w: [], b: [] };
@@ -1057,6 +1247,7 @@ function startNewAnalysis() {
   // Reset analysis variables
   moveHistory = [];
   currentMoveIndex = -1;
+  winSoundPlayed = false;
   
   renderBoard();
   updateStatus();
@@ -1099,6 +1290,14 @@ function hasAnyCapture(color) {
 
 // ----- Menu and Navigation Functions -----
 function initializeMenu() {
+  // Prepare win sound lazily
+  if (!winSound) {
+    try {
+      winSound = new Audio('ui assets/clappy.mp3');
+      winSound.preload = 'auto';
+      winSound.volume = 0.7;
+    } catch (e) {}
+  }
   // Add click handlers to menu items
   const menuItems = document.querySelectorAll('.menu-item');
   menuItems.forEach(item => {
@@ -1161,6 +1360,7 @@ function startGame(mode) {
   currentPlayer = 'w';
   selected = null;
   lastMove = null;
+  enPassantTarget = null;
   gameState = 'playing';
   dropSelection = null;
   pockets = { w: [], b: [] };
@@ -1247,6 +1447,7 @@ function restorePosition() {
     currentPlayer = moveData.currentPlayer;
     selected = null;
     lastMove = moveData.lastMove;
+    enPassantTarget = moveData.enPassantTarget || null;
     gameState = moveData.gameState;
     dropSelection = moveData.dropSelection;
     pockets = { ...moveData.pockets };
@@ -1265,6 +1466,7 @@ function saveCurrentPosition() {
     board: board.map(row => [...row]),
     currentPlayer: currentPlayer,
     lastMove: lastMove,
+    enPassantTarget: enPassantTarget ? { ...enPassantTarget } : null,
     gameState: gameState,
     dropSelection: dropSelection,
     pockets: { ...pockets },
