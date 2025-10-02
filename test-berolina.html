@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Berolina Chess Test</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>Berolina Chess Test</h1>
+  <p>This is a test of the Berolina chess variant where all pawns are Berolina pawns.</p>
+  <p>Berolina pawns move diagonally forward and capture straight forward (opposite of regular pawns).</p>
+  
+  <div id="game-container" class="game-container">
+    <div id="chessboard"></div>
+    <div class="game-controls">
+      <button id="back-to-menu" class="control-button">Back to Menu</button>
+      <button id="flip-board" class="control-button">Flip Board</button>
+    </div>
+  </div>
+
+  <script src="chess.js"></script>
+  <script>
+    // Set up Berolina chess directly
+    gameMode = 'berolina';
+    board = [...BEROLINA_BOARD.map(row => [...row])];
+    currentPlayer = 'w';
+    selected = null;
+    lastMove = null;
+    gameState = 'playing';
+    dropSelection = null;
+    pockets = { w: [], b: [] };
+    initializeCastlingRights();
+    resignedBy = null;
+    
+    // Initialize UI and render
+    initializeUI();
+    renderBoard();
+    updateStatus();
+    renderPockets();
+    
+    // Set the mode selector to Berolina
+    if (modeSelector) {
+      modeSelector.value = 'berolina';
+    }
+  </script>
+</body>
+</html>

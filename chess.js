@@ -2,10 +2,11 @@ const boardElement = document.getElementById('chessboard');
 const selectionMenu = document.getElementById('selection-menu');
 const gameContainer = document.getElementById('game-container');
 
-// Game mode (standard, capablanca, chess960, crazyhouse)
+// Game mode (standard, capablanca, chess960, crazyhouse, berolina)
 let gameMode = 'standard';
 let gameState = 'playing'; // 'playing', 'check', 'checkmate', 'stalemate'
 let boardFlipped = false; // Track board orientation
+let botMode = false; // If true, Black is controlled by a random bot
 
 // Analysis mode variables
 let moveHistory = []; // Array to store all moves
@@ -18,6 +19,8 @@ const UNICODE_PIECES = {
   bK: '♚', bQ: '♛', bR: '♜', bB: '♝', bN: '♞', bP: '♟',
   // Capablanca pieces
   wC: '♔', wA: '♕', bC: '♚', bA: '♛', // Using similar symbols for now
+  // Berolina pawns (using inverted pawn symbols)
+  wS: '♟', bS: '♙',
 };
 
 // PNG chess pieces (with fallback to Unicode) - Updated paths
@@ -39,6 +42,9 @@ const PIECES = {
   wA: 'ui assets/pieces/wA.png',
   bC: 'ui assets/pieces/bC.png',
   bA: 'ui assets/pieces/bA.png',
+  // Berolina pawns
+  wS: 'ui assets/pieces/wS.png',
+  bS: 'ui assets/pieces/bS.png',
 };
 
 // Initial board setups
@@ -62,6 +68,17 @@ const CAPABLANCA_BOARD = [
   [null,null,null,null,null,null,null,null,null,null],
   ['wP','wP','wP','wP','wP','wP','wP','wP','wP','wP'],
   ['wR','wN','wA','wB','wQ','wK','wB','wC','wN','wR'],
+];
+
+const BEROLINA_BOARD = [
+  ['bR','bN','bB','bQ','bK','bB','bN','bR'],
+  ['bS','bS','bS','bS','bS','bS','bS','bS'],
+  [null,null,null,null,null,null,null,null],
+  [null,null,null,null,null,null,null,null],
+  [null,null,null,null,null,null,null,null],
+  [null,null,null,null,null,null,null,null],
+  ['wS','wS','wS','wS','wS','wS','wS','wS'],
+  ['wR','wN','wB','wQ','wK','wB','wN','wR'],
 ];
 
 let board = [...STANDARD_BOARD.map(row => [...row])];
@@ -107,6 +124,7 @@ function initializeUI() {
     <option value="chess960">Chess960</option>
     <option value="crazyhouse">Crazyhouse</option>
     <option value="giveaway">Antichess</option>
+    <option value="berolina">Berolina Chess</option>
   `;
   modeSelector.addEventListener('change', changeGameMode);
   
@@ -196,6 +214,8 @@ function changeGameMode() {
     board = generateChess960Board();
   } else if (gameMode === 'giveaway') {
     board = [...STANDARD_BOARD.map(row => [...row])];
+  } else if (gameMode === 'berolina') {
+    board = [...BEROLINA_BOARD.map(row => [...row])];
   } else {
     // standard and crazyhouse both start from standard setup
     board = [...STANDARD_BOARD.map(row => [...row])];
@@ -265,11 +285,13 @@ function updateStatus() {
     statusDisplay.style.color = '#ff4444';
     if (resignButton) resignButton.disabled = true;
   } else if (gameState === 'check') {
-    statusDisplay.textContent = `${currentPlayer === 'w' ? 'White' : 'Black'}'s turn - CHECK!`;
+    const turnLabel = (botMode && currentPlayer === 'b') ? "Bot's" : (currentPlayer === 'w' ? 'White' : 'Black');
+    statusDisplay.textContent = `${turnLabel}'s turn - CHECK!`;
     statusDisplay.style.color = '#ff4444';
     if (resignButton) resignButton.disabled = false;
   } else {
-    statusDisplay.textContent = `${currentPlayer === 'w' ? 'White' : 'Black'}'s turn`;
+    const turnLabel = (botMode && currentPlayer === 'b') ? "Bot's" : (currentPlayer === 'w' ? 'White' : 'Black');
+    statusDisplay.textContent = `${turnLabel}'s turn`;
     statusDisplay.style.color = '#333';
     if (resignButton) resignButton.disabled = false;
   }
@@ -343,6 +365,7 @@ function onSquareClick(row, col) {
       renderBoard();
       updateStatus();
       renderPockets();
+      triggerBotMoveIfNeeded();
       return;
     } else {
       selected = null;
@@ -376,7 +399,7 @@ function movePiece(from, to) {
   }
 
   // Check for pawn promotion
-  const needsPromotion = piece[1] === 'P' && 
+  const needsPromotion = (piece[1] === 'P' || piece[1] === 'S') && 
     ((piece[0] === 'w' && to.row === 0) || (piece[0] === 'b' && to.row === 7));
   
   if (needsPromotion) {
@@ -436,6 +459,7 @@ function showPromotionDialog(square, piece) {
       if (analysisMode) saveCurrentPosition();
       renderBoard();
       updateStatus();
+      triggerBotMoveIfNeeded();
     };
     
     dialog.appendChild(button);
@@ -459,6 +483,7 @@ function isLegalMove(from, to) {
   
   switch (piece[1]) {
     case 'P': // Pawn
+    case 'S': // Berolina pawn
       isValidMove = isValidPawnMove(from, to, piece);
       break;
     case 'N': // Knight
@@ -515,14 +540,41 @@ function isValidPawnMove(from, to, piece) {
   const dir = piece[0] === 'w' ? -1 : 1;
   const startRow = piece[0] === 'w' ? 6 : 1;
   
-  // Forward move
-  if (dc === 0 && !target) {
-    if (dr === dir) return true;
-    if (from.row === startRow && dr === 2 * dir && !board[from.row + dir][from.col]) return true;
-  }
+  // Check if this is a Berolina pawn
+  const isBerolina = piece[1] === 'S';
   
-  // Capture move
-  if (Math.abs(dc) === 1 && dr === dir && target && target[0] !== piece[0]) return true;
+  if (isBerolina) {
+    // Berolina pawns move diagonally forward and capture straight forward
+    
+    // Diagonal move (non-capture)
+    if (Math.abs(dc) === 1 && dr === dir && !target) {
+      return true;
+    }
+    
+    // Two-square diagonal move on first move
+    if (from.row === startRow && Math.abs(dc) === 2 && dr === 2 * dir && !target) {
+      // Check if the intermediate square is empty
+      const intermediateRow = from.row + dir;
+      const intermediateCol = from.col + Math.sign(dc);
+      if (!board[intermediateRow][intermediateCol]) return true;
+    }
+    
+    // Straight capture
+    if (dc === 0 && dr === dir && target && target[0] !== piece[0]) {
+      return true;
+    }
+  } else {
+    // Regular pawns move straight forward and capture diagonally
+    
+    // Forward move
+    if (dc === 0 && !target) {
+      if (dr === dir) return true;
+      if (from.row === startRow && dr === 2 * dir && !board[from.row + dir][from.col]) return true;
+    }
+    
+    // Capture move
+    if (Math.abs(dc) === 1 && dr === dir && target && target[0] !== piece[0]) return true;
+  }
   
   return false;
 }
@@ -696,7 +748,7 @@ function isLegalDrop(to) {
   if (board[to.row][to.col]) return false; // must be empty
   if (!dropSelection) return false;
   // Pawn cannot be dropped on first/last rank
-  if (dropSelection === 'P') {
+  if (dropSelection === 'P' || dropSelection === 'S') {
     if ((currentPlayer === 'w' && to.row === 0) || (currentPlayer === 'b' && to.row === 7)) return false;
   }
   return true;
@@ -803,6 +855,7 @@ function performCastle(color, side) {
   if (analysisMode) saveCurrentPosition();
   renderBoard();
   updateStatus();
+  triggerBotMoveIfNeeded();
 }
 
 function updateCastlingRightsAfterMove(piece, from, to) {
@@ -848,6 +901,10 @@ function canPieceAttackSquare(from, to, piece) {
     case 'P': {
       const dir = piece[0] === 'w' ? -1 : 1;
       return dr === dir && Math.abs(dc) === 1;
+    }
+    case 'S': {
+      const dir = piece[0] === 'w' ? -1 : 1;
+      return dr === dir && dc === 0; // Berolina pawns attack straight forward
     }
     case 'N':
       return (Math.abs(dr) === 2 && Math.abs(dc) === 1) || (Math.abs(dr) === 1 && Math.abs(dc) === 2);
@@ -956,6 +1013,8 @@ function startNewGame() {
     board = [...CAPABLANCA_BOARD.map(row => [...row])];
   } else if (gameMode === 'chess960') {
     board = generateChess960Board();
+  } else if (gameMode === 'berolina') {
+    board = [...BEROLINA_BOARD.map(row => [...row])];
   } else {
     board = [...STANDARD_BOARD.map(row => [...row])];
   }
@@ -971,6 +1030,7 @@ function startNewGame() {
   renderBoard();
   updateStatus();
   renderPockets();
+  triggerBotMoveIfNeeded();
 }
 
 function startNewAnalysis() {
@@ -979,6 +1039,8 @@ function startNewAnalysis() {
     board = [...CAPABLANCA_BOARD.map(row => [...row])];
   } else if (gameMode === 'chess960') {
     board = generateChess960Board();
+  } else if (gameMode === 'berolina') {
+    board = [...BEROLINA_BOARD.map(row => [...row])];
   } else {
     board = [...STANDARD_BOARD.map(row => [...row])];
   }
@@ -1059,6 +1121,9 @@ function handleMenuSelection(mode) {
     case 'play':
       startGame('standard');
       break;
+    case 'bot':
+      startGame('bot');
+      break;
     case 'puzzles':
       // TODO: Implement puzzles with FEN
       alert('Puzzles feature coming soon!');
@@ -1080,12 +1145,15 @@ function startGame(mode) {
   
   // Set analysis mode
   analysisMode = (mode === 'analysis');
+  botMode = (mode === 'bot');
   
   // Initialize game state
   if (gameMode === 'capablanca') {
     board = [...CAPABLANCA_BOARD.map(row => [...row])];
   } else if (gameMode === 'chess960') {
     board = generateChess960Board();
+  } else if (gameMode === 'berolina') {
+    board = [...BEROLINA_BOARD.map(row => [...row])];
   } else {
     board = [...STANDARD_BOARD.map(row => [...row])];
   }
@@ -1112,6 +1180,7 @@ function startGame(mode) {
   renderBoard();
   updateStatus();
   renderPockets();
+  triggerBotMoveIfNeeded();
 }
 
 function showMenu() {
@@ -1158,6 +1227,8 @@ function restorePosition() {
       board = [...CAPABLANCA_BOARD.map(row => [...row])];
     } else if (gameMode === 'chess960') {
       board = generateChess960Board();
+    } else if (gameMode === 'berolina') {
+      board = [...BEROLINA_BOARD.map(row => [...row])];
     } else {
       board = [...STANDARD_BOARD.map(row => [...row])];
     }
@@ -1186,6 +1257,7 @@ function restorePosition() {
   renderBoard();
   updateStatus();
   renderPockets();
+  triggerBotMoveIfNeeded();
 }
 
 function saveCurrentPosition() {
@@ -1271,4 +1343,66 @@ function renderBoard() {
       boardElement.appendChild(square);
     }
   }
+}
+
+// ----- Simple Random-Move Bot (plays Black) -----
+function triggerBotMoveIfNeeded() {
+  if (!botMode) return;
+  if (analysisMode) return;
+  if (gameState !== 'playing' && gameState !== 'check') return;
+  if (currentPlayer !== 'b') return;
+  // Delay a bit for UX
+  setTimeout(() => makeRandomBotMove('b'), 300);
+}
+
+function collectAllLegalMoves(color) {
+  const rows = 8;
+  const cols = gameMode === 'capablanca' ? 10 : 8;
+  const moves = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const p = board[r][c];
+      if (!p || p[0] !== color) continue;
+      for (let tr = 0; tr < rows; tr++) {
+        for (let tc = 0; tc < cols; tc++) {
+          if (isLegalMove({ row: r, col: c }, { row: tr, col: tc })) {
+            moves.push({ from: { row: r, col: c }, to: { row: tr, col: tc } });
+          }
+        }
+      }
+    }
+  }
+  return moves;
+}
+
+function makeRandomBotMove(color) {
+  if (gameState !== 'playing' && gameState !== 'check') return;
+  if (currentPlayer !== color) return;
+  const legalMoves = collectAllLegalMoves(color);
+  if (legalMoves.length === 0) {
+    checkGameState();
+    updateStatus();
+    return;
+  }
+  const choice = legalMoves[Math.floor(Math.random() * legalMoves.length)];
+
+  // Execute the chosen move using existing helpers
+  const moveOutcome = movePiece(choice.from, choice.to);
+  if (moveOutcome.needsPromotion) {
+    // Auto-promote to queen for the bot
+    const pawn = board[choice.from.row][choice.from.col];
+    board[choice.to.row][choice.to.col] = color + 'Q';
+    board[choice.from.row][choice.from.col] = null;
+    currentPlayer = currentPlayer === 'w' ? 'b' : 'w';
+    lastMove = { from: choice.from, to: choice.to };
+  } else {
+    currentPlayer = currentPlayer === 'w' ? 'b' : 'w';
+    lastMove = { from: choice.from, to: choice.to };
+  }
+
+  checkGameState();
+  if (analysisMode) saveCurrentPosition();
+  renderBoard();
+  updateStatus();
+  renderPockets();
 }
