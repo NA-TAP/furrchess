@@ -15,6 +15,11 @@ let moveHistory = []; // Array to store all moves
 let currentMoveIndex = -1; // Current position in move history (-1 = initial position)
 let analysisMode = false; // Whether we're in analysis mode
 
+// Board editor variables
+let boardEditorMode = false; // Whether we're in board editor mode
+let selectedPiece = null; // Currently selected piece for placement
+let editorBoard = null; // Copy of board for editing
+
 // Unicode chess pieces as fallback
 const UNICODE_PIECES = {
   wK: '♔', wQ: '♕', wR: '♖', wB: '♗', wN: '♘', wP: '♙',
@@ -144,6 +149,76 @@ function initializeUI() {
   
   controls.appendChild(modeLabel);
   
+  // Bot color selection (only show in bot mode)
+  if (botMode) {
+    const botColorContainer = document.createElement('div');
+    botColorContainer.style.cssText = 'margin: 10px 0; text-align: center;';
+    
+    const botColorLabel = document.createElement('label');
+    botColorLabel.textContent = 'Bot Color: ';
+    botColorLabel.style.marginRight = '10px';
+    
+    const botColorSelect = document.createElement('select');
+    botColorSelect.innerHTML = `
+      <option value="b">Black (Bot plays second)</option>
+      <option value="w">White (Bot plays first)</option>
+    `;
+    botColorSelect.value = botColor;
+    botColorSelect.addEventListener('change', (e) => {
+      botColor = e.target.value;
+      // Update status display
+      updateStatus();
+    });
+    
+    botColorContainer.appendChild(botColorLabel);
+    botColorContainer.appendChild(botColorSelect);
+    controls.appendChild(botColorContainer);
+    
+    // Bot depth selection
+    const botDepthContainer = document.createElement('div');
+    botDepthContainer.style.cssText = 'margin: 10px 0; text-align: center;';
+    
+    const botDepthLabel = document.createElement('label');
+    botDepthLabel.textContent = 'Bot Strength: ';
+    botDepthLabel.style.marginRight = '10px';
+    
+    const botDepthSelect = document.createElement('select');
+    botDepthSelect.innerHTML = `
+      <option value="1">~800 ELO (Depth 1)</option>
+      <option value="2">~1000 ELO (Depth 2)</option>
+      <option value="3">~1200 ELO (Depth 3)</option>
+      <option value="4">~1400 ELO (Depth 4)</option>
+      <option value="5">~1600 ELO (Depth 5)</option>
+      <option value="6">~1800 ELO (Depth 6)</option>
+      <option value="7">~2000 ELO (Depth 7)</option>
+      <option value="8">~2200 ELO (Depth 8)</option>
+      <option value="9">~2400 ELO (Depth 9)</option>
+      <option value="10">~2600 ELO (Depth 10)</option>
+      <option value="12">~2800 ELO (Depth 12)</option>
+      <option value="15">~3000 ELO (Depth 15)</option>
+      <option value="18">~3200 ELO (Depth 18)</option>
+      <option value="20">~3400 ELO (Depth 20)</option>
+      <option value="22">~3600 ELO (Depth 22)</option>
+      <option value="25" selected>~3800+ ELO (Depth 25)</option>
+    `;
+    botDepthSelect.value = botDepth;
+    botDepthSelect.addEventListener('change', (e) => {
+      botDepth = parseInt(e.target.value);
+      // Show confirmation
+      const strengthNames = ['~800 ELO', '~1000 ELO', '~1200 ELO', '~1400 ELO', '~1600 ELO', '~1800 ELO', '~2000 ELO', '~2200 ELO', '~2400 ELO', '~2600 ELO', '', '~2800 ELO', '', '', '~3000 ELO', '', '', '~3200 ELO', '', '~3400 ELO', '', '~3600 ELO', '', '', '~3800+ ELO'];
+      const strengthName = strengthNames[botDepth - 1];
+      if (statusDisplay) {
+        statusDisplay.textContent = `Bot strength set to ${strengthName} (Depth ${botDepth})`;
+        statusDisplay.style.color = '#0066cc';
+        setTimeout(() => updateStatus(), 2000);
+      }
+    });
+    
+    botDepthContainer.appendChild(botDepthLabel);
+    botDepthContainer.appendChild(botDepthSelect);
+    controls.appendChild(botDepthContainer);
+  }
+  
   // Create status display
   statusDisplay = document.createElement('div');
   statusDisplay.style.cssText = 'margin: 10px 0; font-weight: bold; text-align: center;';
@@ -195,8 +270,20 @@ function initializeUI() {
   forwardButton.onclick = goForward;
   forwardButton.disabled = true;
   
+  const savePgnButton = document.createElement('button');
+  savePgnButton.className = 'action-button';
+  savePgnButton.textContent = 'Save as PGN';
+  savePgnButton.onclick = saveAsPGN;
+  
+  const loadPgnButton = document.createElement('button');
+  loadPgnButton.className = 'action-button';
+  loadPgnButton.textContent = 'Load PGN';
+  loadPgnButton.onclick = loadFromPGN;
+  
   analysisControls.appendChild(backButton);
   analysisControls.appendChild(forwardButton);
+  analysisControls.appendChild(savePgnButton);
+  analysisControls.appendChild(loadPgnButton);
   controls.appendChild(analysisControls);
   
   // Show/hide analysis controls based on mode
@@ -310,12 +397,12 @@ function updateStatus() {
     if (resignButton) resignButton.disabled = true;
     if (!analysisMode && !winSoundPlayed && winSound) { try { winSound.currentTime = 0; winSound.play(); } catch(e) {} winSoundPlayed = true; }
   } else if (gameState === 'check') {
-    const turnLabel = (botMode && currentPlayer === 'b') ? "Bot's" : (currentPlayer === 'w' ? 'White' : 'Black');
+    const turnLabel = (botMode && currentPlayer === botColor) ? "Bot's" : (currentPlayer === 'w' ? 'White' : 'Black');
     statusDisplay.textContent = `${turnLabel}'s turn - CHECK!`;
     statusDisplay.style.color = '#ff4444';
     if (resignButton) resignButton.disabled = false;
   } else {
-    const turnLabel = (botMode && currentPlayer === 'b') ? "Bot's" : (currentPlayer === 'w' ? 'White' : 'Black');
+    const turnLabel = (botMode && currentPlayer === botColor) ? "Bot's" : (currentPlayer === 'w' ? 'White' : 'Black');
     statusDisplay.textContent = `${turnLabel}'s turn`;
     statusDisplay.style.color = '#333';
     if (resignButton) resignButton.disabled = false;
@@ -325,6 +412,12 @@ function updateStatus() {
 
 
 function onSquareClick(row, col) {
+  // Handle board editor mode
+  if (boardEditorMode) {
+    onEditorSquareClick(row, col);
+    return;
+  }
+  
   if (gameState === 'checkmate' || gameState === 'stalemate' || gameState === 'resigned') return;
   
   const piece = board[row][col];
@@ -1330,6 +1423,9 @@ function handleMenuSelection(mode) {
     case 'analysis':
       startGame('analysis');
       break;
+    case 'board-editor':
+      startBoardEditor();
+      break;
     case 'placeholder1':
     case 'placeholder2':
     case 'placeholder3':
@@ -1345,6 +1441,11 @@ function startGame(mode) {
   // Set analysis mode
   analysisMode = (mode === 'analysis');
   botMode = (mode === 'bot');
+  
+  // Initialize bot color (default to black)
+  if (botMode) {
+    botColor = 'b';
+  }
   
   // Initialize game state
   if (gameMode === 'capablanca') {
@@ -1552,9 +1653,9 @@ function triggerBotMoveIfNeeded() {
   if (!botMode) return;
   if (analysisMode) return;
   if (gameState !== 'playing' && gameState !== 'check') return;
-  if (currentPlayer !== 'b') return;
+  if (currentPlayer !== botColor) return;
   // Delay a bit for UX
-  setTimeout(() => makeRandomBotMove('b'), 300);
+  setTimeout(() => makeMinimaxBotMove(botColor), 300);
 }
 
 function collectAllLegalMoves(color) {
@@ -1607,4 +1708,1289 @@ function makeRandomBotMove(color) {
   renderBoard();
   updateStatus();
   renderPockets();
+}
+
+// ----- Board Editor Functions -----
+function startBoardEditor() {
+  boardEditorMode = true;
+  analysisMode = false;
+  botMode = false;
+  gameMode = 'standard';
+  boardFlipped = false;
+  
+  // Initialize empty board for editing
+  editorBoard = Array.from({ length: 8 }, () => Array(8).fill(null));
+  board = editorBoard.map(row => [...row]);
+  
+  selectedPiece = null;
+  selected = null;
+  currentPlayer = 'w';
+  lastMove = null;
+  enPassantTarget = null;
+  gameState = 'playing';
+  dropSelection = null;
+  pockets = { w: [], b: [] };
+  initializeCastlingRights();
+  resignedBy = null;
+  
+  // Show game container and hide menu
+  selectionMenu.style.display = 'none';
+  gameContainer.style.display = 'flex';
+  
+  // Initialize board editor UI
+  initializeBoardEditorUI();
+  renderBoard();
+  renderBoardEditor();
+}
+
+function initializeBoardEditorUI() {
+  // Clear any existing game controls first
+  const existingGameControls = gameContainer.querySelector('.game-controls-wrapper');
+  if (existingGameControls) {
+    existingGameControls.remove();
+  }
+  
+  // Create board editor controls
+  const controls = document.createElement('div');
+  controls.style.cssText = 'margin: 20px 0; text-align: center;';
+  
+  // Editor title
+  const title = document.createElement('h2');
+  title.textContent = 'Board Editor';
+  title.style.cssText = 'margin: 0 0 20px 0; color: #3e3e3e; font-family: "Minecraftia", "Press Start 2P", "Courier New", Courier, monospace;';
+  controls.appendChild(title);
+  
+  // Piece selection area
+  const pieceSelection = document.createElement('div');
+  pieceSelection.id = 'piece-selection';
+  pieceSelection.style.cssText = 'display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin: 20px 0; padding: 15px; background: #f0f0f0; border: 2px solid #3e3e3e; border-radius: 8px;';
+  
+  // Add piece buttons
+  const pieceTypes = ['K', 'Q', 'R', 'B', 'N', 'P'];
+  const colors = ['w', 'b'];
+  
+  colors.forEach(color => {
+    pieceTypes.forEach(pieceType => {
+      const button = document.createElement('button');
+      button.className = 'piece-select-button';
+      button.dataset.piece = color + pieceType;
+      
+      const pieceCode = color + pieceType;
+      if (PIECES[pieceCode]) {
+        const img = document.createElement('img');
+        img.src = PIECES[pieceCode];
+        img.style.width = '30px';
+        img.style.height = '30px';
+        button.appendChild(img);
+      } else {
+        button.textContent = pieceType;
+      }
+      
+      button.onclick = () => selectPieceForEditor(pieceCode);
+      pieceSelection.appendChild(button);
+    });
+  });
+  
+  // Add clear button
+  const clearButton = document.createElement('button');
+  clearButton.textContent = 'Clear Square';
+  clearButton.className = 'action-button';
+  clearButton.onclick = () => selectPieceForEditor(null);
+  pieceSelection.appendChild(clearButton);
+  
+  controls.appendChild(pieceSelection);
+  
+  // Editor controls
+  const editorControls = document.createElement('div');
+  editorControls.style.cssText = 'display: flex; gap: 10px; justify-content: center; align-items: center; margin: 20px 0;';
+  
+  const clearBoardButton = document.createElement('button');
+  clearBoardButton.className = 'action-button';
+  clearBoardButton.textContent = 'Clear Board';
+  clearBoardButton.onclick = clearEditorBoard;
+  editorControls.appendChild(clearBoardButton);
+  
+  const resetBoardButton = document.createElement('button');
+  resetBoardButton.className = 'action-button';
+  resetBoardButton.textContent = 'Reset to Start';
+  resetBoardButton.onclick = resetEditorBoard;
+  editorControls.appendChild(resetBoardButton);
+  
+  const savePositionButton = document.createElement('button');
+  savePositionButton.className = 'action-button';
+  savePositionButton.textContent = 'Save Position';
+  savePositionButton.onclick = saveEditorPosition;
+  editorControls.appendChild(savePositionButton);
+  
+  const loadPositionButton = document.createElement('button');
+  loadPositionButton.className = 'action-button';
+  loadPositionButton.textContent = 'Load Position';
+  loadPositionButton.onclick = loadEditorPosition;
+  editorControls.appendChild(loadPositionButton);
+  
+  const playFromHereButton = document.createElement('button');
+  playFromHereButton.className = 'action-button';
+  playFromHereButton.textContent = 'Play from Here';
+  playFromHereButton.onclick = playFromEditorPosition;
+  editorControls.appendChild(playFromHereButton);
+  
+  const saveFenButton = document.createElement('button');
+  saveFenButton.className = 'action-button';
+  saveFenButton.textContent = 'Save as FEN';
+  saveFenButton.onclick = saveAsFEN;
+  editorControls.appendChild(saveFenButton);
+  
+  const loadFenButton = document.createElement('button');
+  loadFenButton.className = 'action-button';
+  loadFenButton.textContent = 'Load FEN';
+  loadFenButton.onclick = loadFromFEN;
+  editorControls.appendChild(loadFenButton);
+  
+  controls.appendChild(editorControls);
+  
+  // Instructions
+  const instructions = document.createElement('div');
+  instructions.style.cssText = 'margin: 15px 0; padding: 10px; background: #e8f4f8; border: 1px solid #3e3e3e; border-radius: 4px; font-size: 12px; color: #3e3e3e;';
+  instructions.innerHTML = '<strong>Instructions:</strong> Select a piece from above, then click on the board to place it. Click "Clear Square" to remove pieces.';
+  controls.appendChild(instructions);
+  
+  // Insert controls before the board in the game container
+  const gameControls = document.createElement('div');
+  gameControls.className = 'game-controls-wrapper';
+  gameControls.style.cssText = 'margin: 20px 0; text-align: center;';
+  gameControls.appendChild(controls);
+  gameContainer.insertBefore(gameControls, boardElement);
+}
+
+function selectPieceForEditor(piece) {
+  selectedPiece = piece;
+  
+  // Update visual selection
+  const buttons = document.querySelectorAll('.piece-select-button');
+  buttons.forEach(btn => {
+    btn.classList.remove('selected');
+    if (btn.dataset.piece === piece) {
+      btn.classList.add('selected');
+    }
+  });
+  
+  // Clear any existing piece selection on board
+  selected = null;
+  renderBoard();
+}
+
+function onEditorSquareClick(row, col) {
+  if (!boardEditorMode) return;
+  
+  if (selectedPiece) {
+    // Place piece
+    editorBoard[row][col] = selectedPiece;
+    board[row][col] = selectedPiece;
+  } else {
+    // Clear square
+    editorBoard[row][col] = null;
+    board[row][col] = null;
+  }
+  
+  renderBoard();
+}
+
+function clearEditorBoard() {
+  editorBoard = Array.from({ length: 8 }, () => Array(8).fill(null));
+  board = editorBoard.map(row => [...row]);
+  renderBoard();
+}
+
+function resetEditorBoard() {
+  editorBoard = [...STANDARD_BOARD.map(row => [...row])];
+  board = editorBoard.map(row => [...row]);
+  renderBoard();
+}
+
+function saveEditorPosition() {
+  const position = {
+    board: editorBoard.map(row => [...row]),
+    timestamp: new Date().toISOString()
+  };
+  
+  const positions = JSON.parse(localStorage.getItem('chessPositions') || '[]');
+  positions.push(position);
+  localStorage.setItem('chessPositions', JSON.stringify(positions));
+  
+  alert('Position saved! You can load it later from the "Load Position" button.');
+}
+
+function loadEditorPosition() {
+  const positions = JSON.parse(localStorage.getItem('chessPositions') || '[]');
+  
+  if (positions.length === 0) {
+    alert('No saved positions found.');
+    return;
+  }
+  
+  // Create a simple selection dialog
+  const dialog = document.createElement('div');
+  dialog.className = 'promotion-dialog';
+  dialog.style.width = '400px';
+  
+  dialog.innerHTML = '<h3>Select Position to Load:</h3>';
+  
+  positions.forEach((pos, index) => {
+    const button = document.createElement('button');
+    button.className = 'promotion-button';
+    button.style.width = '100%';
+    button.style.margin = '5px 0';
+    button.textContent = `Position ${index + 1} - ${new Date(pos.timestamp).toLocaleString()}`;
+    
+    button.onclick = () => {
+      editorBoard = pos.board.map(row => [...row]);
+      board = editorBoard.map(row => [...row]);
+      renderBoard();
+      document.body.removeChild(dialog);
+    };
+    
+    dialog.appendChild(button);
+  });
+  
+  const cancelButton = document.createElement('button');
+  cancelButton.className = 'promotion-button';
+  cancelButton.style.width = '100%';
+  cancelButton.textContent = 'Cancel';
+  cancelButton.onclick = () => document.body.removeChild(dialog);
+  dialog.appendChild(cancelButton);
+  
+  document.body.appendChild(dialog);
+}
+
+function playFromEditorPosition() {
+  if (!boardEditorMode) return;
+  
+  // Validate that both kings are present
+  let whiteKing = false, blackKing = false;
+  for (let row = 0; row < 8; row++) {
+    for (let col = 0; col < 8; col++) {
+      const piece = editorBoard[row][col];
+      if (piece === 'wK') whiteKing = true;
+      if (piece === 'bK') blackKing = true;
+    }
+  }
+  
+  if (!whiteKing || !blackKing) {
+    alert('Both kings must be present to start a game!');
+    return;
+  }
+  
+  // Exit editor mode and start a game with the current position
+  boardEditorMode = false;
+  analysisMode = false;
+  botMode = false;
+  gameMode = 'standard';
+  
+  // Copy editor board to main board
+  board = editorBoard.map(row => [...row]);
+  
+  // Reset game state
+  currentPlayer = 'w';
+  selected = null;
+  lastMove = null;
+  enPassantTarget = null;
+  gameState = 'playing';
+  dropSelection = null;
+  pockets = { w: [], b: [] };
+  initializeCastlingRights();
+  resignedBy = null;
+  winSoundPlayed = false;
+  
+  // Reinitialize UI for game mode
+  initializeUI();
+  renderBoard();
+  updateStatus();
+  renderPockets();
+}
+
+function renderBoardEditor() {
+  // This function is called to update the editor display
+  // The main renderBoard function handles the actual rendering
+}
+
+// ----- PGN Export/Import Functions -----
+function saveAsPGN() {
+  if (!analysisMode || moveHistory.length === 0) {
+    alert('No moves to export. Play some moves first!');
+    return;
+  }
+  
+  // Generate PGN from move history
+  const pgn = generatePGN();
+  
+  // Create and download file
+  const blob = new Blob([pgn], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `chess_game_${new Date().toISOString().slice(0, 10)}.pgn`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function generatePGN() {
+  let pgn = '';
+  
+  // PGN header
+  pgn += '[Event "Furr Chess Game"]\n';
+  pgn += `[Site "Furr Chess"]\n`;
+  pgn += `[Date "${new Date().toISOString().slice(0, 10)}"]\n`;
+  pgn += '[Round "1"]\n';
+  pgn += '[White "Player"]\n';
+  pgn += '[Black "Player"]\n';
+  pgn += `[Result "*"]\n`;
+  pgn += `[Variant "${gameMode}"]\n`;
+  pgn += '\n';
+  
+  // Generate moves from move history
+  const moves = [];
+  for (let i = 0; i < moveHistory.length - 1; i++) {
+    const currentPos = moveHistory[i];
+    const nextPos = moveHistory[i + 1];
+    const move = findMoveBetweenPositions(currentPos, nextPos);
+    if (move) {
+      moves.push(move);
+    }
+  }
+  
+  // Format moves
+  for (let i = 0; i < moves.length; i += 2) {
+    const moveNumber = Math.floor(i / 2) + 1;
+    pgn += `${moveNumber}. ${moves[i]}`;
+    if (moves[i + 1]) {
+      pgn += ` ${moves[i + 1]}`;
+    }
+    pgn += ' ';
+  }
+  
+  pgn += '\n\n*';
+  
+  return pgn;
+}
+
+function findMoveBetweenPositions(fromPos, toPos) {
+  // Find the move that was made between two positions
+  for (let row = 0; row < 8; row++) {
+    for (let col = 0; col < 8; col++) {
+      const fromPiece = fromPos.board[row][col];
+      const toPiece = toPos.board[row][col];
+      
+      if (fromPiece && !toPiece) {
+        // Piece was removed from this square
+        for (let toRow = 0; toRow < 8; toRow++) {
+          for (let toCol = 0; toCol < 8; toCol++) {
+            const fromToPiece = fromPos.board[toRow][toCol];
+            const toToPiece = toPos.board[toRow][toCol];
+            
+            if (!fromToPiece && toToPiece === fromPiece) {
+              // Found the destination
+              return formatMoveNotation(fromPiece, { row, col }, { row: toRow, col: toCol }, toPos.board);
+            }
+          }
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function formatMoveNotation(piece, from, to, board) {
+  const pieceType = piece[1];
+  const color = piece[0];
+  const fromFile = String.fromCharCode(97 + from.col); // a-h
+  const fromRank = 8 - from.row; // 1-8
+  const toFile = String.fromCharCode(97 + to.col);
+  const toRank = 8 - to.row;
+  
+  // Check for capture
+  const captured = board[to.row][to.col];
+  const capture = captured ? 'x' : '';
+  
+  // Check for check/checkmate (simplified)
+  const isCheck = isKingInCheckAfterMove(color === 'w' ? 'b' : 'w', board);
+  const checkSuffix = isCheck ? '+' : '';
+  
+  if (pieceType === 'P') {
+    // Pawn move
+    if (captured) {
+      return `${fromFile}${capture}${toFile}${toRank}${checkSuffix}`;
+    } else {
+      return `${toFile}${toRank}${checkSuffix}`;
+    }
+  } else {
+    // Piece move
+    const pieceSymbol = pieceType === 'K' ? 'K' : pieceType === 'Q' ? 'Q' : 
+                       pieceType === 'R' ? 'R' : pieceType === 'B' ? 'B' : 'N';
+    return `${pieceSymbol}${capture}${toFile}${toRank}${checkSuffix}`;
+  }
+}
+
+function isKingInCheckAfterMove(color, board) {
+  // Simplified check detection
+  const kingPos = findKing(color);
+  if (!kingPos) return false;
+  
+  const opponentColor = color === 'w' ? 'b' : 'w';
+  return isSquareAttackedBy(kingPos, opponentColor);
+}
+
+function loadFromPGN() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.pgn';
+  input.onchange = function(e) {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const pgnContent = e.target.result;
+        parseAndLoadPGN(pgnContent);
+      };
+      reader.readAsText(file);
+    }
+  };
+  input.click();
+}
+
+function parseAndLoadPGN(pgnContent) {
+  // Simple PGN parser - this is a basic implementation
+  const lines = pgnContent.split('\n');
+  const moves = [];
+  
+  // Find the moves section (after empty line)
+  let inMoves = false;
+  for (const line of lines) {
+    if (line.trim() === '') {
+      inMoves = true;
+      continue;
+    }
+    if (inMoves && !line.startsWith('[')) {
+      // Parse moves from this line
+      const moveMatches = line.match(/\d+\.\s*([^\s]+)\s*([^\s]*)/g);
+      if (moveMatches) {
+        for (const match of moveMatches) {
+          const parts = match.split(/\s+/);
+          if (parts.length > 1) moves.push(parts[1]); // White move
+          if (parts.length > 2) moves.push(parts[2]); // Black move
+        }
+      }
+    }
+  }
+  
+  if (moves.length === 0) {
+    alert('No moves found in PGN file.');
+    return;
+  }
+  
+  // Reset to starting position
+  startNewAnalysis();
+  
+  // Apply moves one by one (this would need more sophisticated parsing)
+  alert(`Found ${moves.length} moves in PGN. Full PGN parsing is complex and would require a chess library. For now, you can manually recreate the position using the board editor.`);
+}
+
+// ----- FEN Export/Import Functions -----
+function saveAsFEN() {
+  if (!boardEditorMode) {
+    alert('FEN export is only available in board editor mode.');
+    return;
+  }
+  
+  const fen = generateFEN(editorBoard);
+  
+  // Copy to clipboard
+  navigator.clipboard.writeText(fen).then(() => {
+    alert('FEN copied to clipboard!\n\n' + fen);
+  }).catch(() => {
+    // Fallback: show in dialog
+    const dialog = document.createElement('div');
+    dialog.className = 'promotion-dialog';
+    dialog.style.width = '500px';
+    
+    dialog.innerHTML = `
+      <h3>FEN Position</h3>
+      <textarea readonly style="width: 100%; height: 100px; font-family: monospace; font-size: 12px; margin: 10px 0;">${fen}</textarea>
+      <button class="promotion-button" onclick="navigator.clipboard.writeText('${fen}').then(() => alert('Copied!'))">Copy to Clipboard</button>
+      <button class="promotion-button" onclick="document.body.removeChild(this.parentNode)">Close</button>
+    `;
+    
+    document.body.appendChild(dialog);
+  });
+}
+
+function generateFEN(board) {
+  let fen = '';
+  
+  // Board position
+  for (let row = 0; row < 8; row++) {
+    let emptyCount = 0;
+    for (let col = 0; col < 8; col++) {
+      const piece = board[row][col];
+      if (piece) {
+        if (emptyCount > 0) {
+          fen += emptyCount;
+          emptyCount = 0;
+        }
+        // Convert piece notation to FEN
+        const fenPiece = piece[0] === 'w' ? piece[1].toUpperCase() : piece[1].toLowerCase();
+        fen += fenPiece;
+      } else {
+        emptyCount++;
+      }
+    }
+    if (emptyCount > 0) {
+      fen += emptyCount;
+    }
+    if (row < 7) fen += '/';
+  }
+  
+  // Active color (assume white to move)
+  fen += ' w ';
+  
+  // Castling rights (simplified - assume all available)
+  fen += 'KQkq ';
+  
+  // En passant target square (none)
+  fen += '- ';
+  
+  // Halfmove clock
+  fen += '0 ';
+  
+  // Fullmove number
+  fen += '1';
+  
+  return fen;
+}
+
+function loadFromFEN() {
+  const fen = prompt('Enter FEN string:');
+  if (!fen) return;
+  
+  try {
+    const parsedBoard = parseFEN(fen);
+    if (parsedBoard) {
+      editorBoard = parsedBoard;
+      board = parsedBoard.map(row => [...row]);
+      renderBoard();
+      alert('FEN loaded successfully!');
+    } else {
+      alert('Invalid FEN string.');
+    }
+  } catch (e) {
+    alert('Error parsing FEN: ' + e.message);
+  }
+}
+
+function parseFEN(fen) {
+  const parts = fen.trim().split(/\s+/);
+  if (parts.length < 1) return null;
+  
+  const board = Array.from({ length: 8 }, () => Array(8).fill(null));
+  const ranks = parts[0].split('/');
+  
+  if (ranks.length !== 8) return null;
+  
+  for (let row = 0; row < 8; row++) {
+    let col = 0;
+    for (const char of ranks[row]) {
+      if (char >= '1' && char <= '8') {
+        // Empty squares
+        col += parseInt(char);
+      } else {
+        // Piece
+        if (col >= 8) return null;
+        
+        const isWhite = char === char.toUpperCase();
+        const pieceType = char.toUpperCase();
+        
+        let pieceCode;
+        switch (pieceType) {
+          case 'K': pieceCode = 'K'; break;
+          case 'Q': pieceCode = 'Q'; break;
+          case 'R': pieceCode = 'R'; break;
+          case 'B': pieceCode = 'B'; break;
+          case 'N': pieceCode = 'N'; break;
+          case 'P': pieceCode = 'P'; break;
+          default: return null;
+        }
+        
+        board[row][col] = (isWhite ? 'w' : 'b') + pieceCode;
+        col++;
+      }
+    }
+    if (col !== 8) return null;
+  }
+  
+  return board;
+}
+
+// ----- Minimax Bot Functions -----
+let botColor = 'b'; // Default bot plays black
+let botDepth = 25; // Minimax depth
+let transpositionTable = new Map(); // Cache for position evaluations
+
+// Piece values for evaluation
+const PIECE_VALUES = {
+  'P': 100, 'N': 320, 'B': 330, 'R': 500, 'Q': 900, 'K': 20000,
+  'S': 100, // Berolina pawn
+  'C': 820, // Chancellor (Rook + Knight)
+  'A': 650, // Archbishop (Bishop + Knight)
+  'M': 20000 // Knightmate non-royal king
+};
+
+// Position values for piece-square tables (simplified)
+const POSITION_VALUES = {
+  'P': [
+    [0,  0,  0,  0,  0,  0,  0,  0],
+    [50, 50, 50, 50, 50, 50, 50, 50],
+    [10, 10, 20, 30, 30, 20, 10, 10],
+    [5,  5, 10, 25, 25, 10,  5,  5],
+    [0,  0,  0, 20, 20,  0,  0,  0],
+    [5, -5,-10,  0,  0,-10, -5,  5],
+    [5, 10, 10,-20,-20, 10, 10,  5],
+    [0,  0,  0,  0,  0,  0,  0,  0]
+  ],
+  'N': [
+    [-50,-40,-30,-30,-30,-30,-40,-50],
+    [-40,-20,  0,  0,  0,  0,-20,-40],
+    [-30,  0, 10, 15, 15, 10,  0,-30],
+    [-30,  5, 15, 20, 20, 15,  5,-30],
+    [-30,  0, 15, 20, 20, 15,  0,-30],
+    [-30,  5, 10, 15, 15, 10,  5,-30],
+    [-40,-20,  0,  5,  5,  0,-20,-40],
+    [-50,-40,-30,-30,-30,-30,-40,-50]
+  ],
+  'B': [
+    [-20,-10,-10,-10,-10,-10,-10,-20],
+    [-10,  0,  0,  0,  0,  0,  0,-10],
+    [-10,  0,  5, 10, 10,  5,  0,-10],
+    [-10,  5,  5, 10, 10,  5,  5,-10],
+    [-10,  0, 10, 10, 10, 10,  0,-10],
+    [-10, 10, 10, 10, 10, 10, 10,-10],
+    [-10,  5,  0,  0,  0,  0,  5,-10],
+    [-20,-10,-10,-10,-10,-10,-10,-20]
+  ],
+  'R': [
+    [0,  0,  0,  0,  0,  0,  0,  0],
+    [5, 10, 10, 10, 10, 10, 10,  5],
+    [-5,  0,  0,  0,  0,  0,  0, -5],
+    [-5,  0,  0,  0,  0,  0,  0, -5],
+    [-5,  0,  0,  0,  0,  0,  0, -5],
+    [-5,  0,  0,  0,  0,  0,  0, -5],
+    [-5,  0,  0,  0,  0,  0,  0, -5],
+    [0,  0,  0,  5,  5,  0,  0,  0]
+  ],
+  'Q': [
+    [-20,-10,-10, -5, -5,-10,-10,-20],
+    [-10,  0,  0,  0,  0,  0,  0,-10],
+    [-10,  0,  5,  5,  5,  5,  0,-10],
+    [-5,  0,  5,  5,  5,  5,  0, -5],
+    [0,  0,  5,  5,  5,  5,  0, -5],
+    [-10,  5,  5,  5,  5,  5,  0,-10],
+    [-10,  0,  5,  0,  0,  0,  0,-10],
+    [-20,-10,-10, -5, -5,-10,-10,-20]
+  ],
+  'K': [
+    [-30,-40,-40,-50,-50,-40,-40,-30],
+    [-30,-40,-40,-50,-50,-40,-40,-30],
+    [-30,-40,-40,-50,-50,-40,-40,-30],
+    [-30,-40,-40,-50,-50,-40,-40,-30],
+    [-20,-30,-30,-40,-40,-30,-30,-20],
+    [-10,-20,-20,-20,-20,-20,-20,-10],
+    [20, 20,  0,  0,  0,  0, 20, 20],
+    [20, 30, 10,  0,  0, 10, 30, 20]
+  ]
+};
+
+function evaluatePosition(board) {
+  let score = 0;
+  
+  // Material and positional evaluation
+  for (let row = 0; row < 8; row++) {
+    for (let col = 0; col < 8; col++) {
+      const piece = board[row][col];
+      if (!piece) continue;
+      
+      const color = piece[0];
+      const pieceType = piece[1];
+      const value = PIECE_VALUES[pieceType] || 0;
+      
+      // Position value
+      let positionValue = 0;
+      if (POSITION_VALUES[pieceType]) {
+        const posRow = color === 'w' ? 7 - row : row;
+        positionValue = POSITION_VALUES[pieceType][posRow][col] || 0;
+      }
+      
+      // Simplified evaluation for speed - only use basic factors
+      const centerControl = calculateCenterControl(row, col, pieceType);
+      
+      // Add to score (positive for white, negative for black)
+      const pieceScore = value + positionValue + centerControl;
+      score += color === 'w' ? pieceScore : -pieceScore;
+    }
+  }
+  
+  // Simplified additional factors for speed
+  score += evaluatePawnStructure(board);
+  
+  return score;
+}
+
+function calculateMobility(board, row, col, piece) {
+  const legalMoves = [];
+  const pieceType = piece[1];
+  const color = piece[0];
+  
+  // Count legal moves for this piece
+  for (let toRow = 0; toRow < 8; toRow++) {
+    for (let toCol = 0; toCol < 8; toCol++) {
+      if (isLegalMove({row, col}, {row: toRow, col: toCol})) {
+        legalMoves.push({row: toRow, col: toCol});
+      }
+    }
+  }
+  
+  // Mobility bonus based on piece type
+  const mobilityBonus = {
+    'P': 2, 'N': 3, 'B': 3, 'R': 2, 'Q': 1, 'K': 1,
+    'S': 2, 'C': 3, 'A': 3, 'M': 1
+  };
+  
+  return legalMoves.length * (mobilityBonus[pieceType] || 1);
+}
+
+function calculateCenterControl(row, col, pieceType) {
+  const centerSquares = [[3,3], [3,4], [4,3], [4,4]];
+  const extendedCenter = [[2,2], [2,3], [2,4], [2,5], [3,2], [3,5], [4,2], [4,5], [5,2], [5,3], [5,4], [5,5]];
+  
+  let centerBonus = 0;
+  
+  // Check if piece controls center squares
+  for (const [centerRow, centerCol] of centerSquares) {
+    if (Math.abs(row - centerRow) <= 1 && Math.abs(col - centerCol) <= 1) {
+      centerBonus += 10;
+    }
+  }
+  
+  // Extended center bonus
+  for (const [extRow, extCol] of extendedCenter) {
+    if (Math.abs(row - extRow) <= 2 && Math.abs(col - extCol) <= 2) {
+      centerBonus += 5;
+    }
+  }
+  
+  return centerBonus;
+}
+
+function calculateKingSafety(board, row, col, piece, color) {
+  if (piece[1] !== 'K') return 0;
+  
+  let safety = 0;
+  
+  // King in corner penalty
+  if ((row === 0 || row === 7) && (col === 0 || col === 7)) {
+    safety -= 20;
+  }
+  
+  // King in center penalty (early game)
+  if (row >= 3 && row <= 4 && col >= 3 && col <= 4) {
+    safety -= 15;
+  }
+  
+  // Pawn shield bonus
+  const pawnShield = countPawnShield(board, row, col, color);
+  safety += pawnShield * 5;
+  
+  return safety;
+}
+
+function countPawnShield(board, kingRow, kingCol, color) {
+  let shieldCount = 0;
+  const direction = color === 'w' ? 1 : -1;
+  
+  // Check pawns in front of king
+  for (let col = Math.max(0, kingCol - 1); col <= Math.min(7, kingCol + 1); col++) {
+    const pawnRow = kingRow + direction;
+    if (pawnRow >= 0 && pawnRow <= 7) {
+      const piece = board[pawnRow][col];
+      if (piece === color + 'P' || piece === color + 'S') {
+        shieldCount++;
+      }
+    }
+  }
+  
+  return shieldCount;
+}
+
+function evaluatePawnStructure(board) {
+  let score = 0;
+  
+  // Doubled pawns penalty
+  for (let col = 0; col < 8; col++) {
+    let whitePawns = 0, blackPawns = 0;
+    for (let row = 0; row < 8; row++) {
+      const piece = board[row][col];
+      if (piece === 'wP' || piece === 'wS') whitePawns++;
+      if (piece === 'bP' || piece === 'bS') blackPawns++;
+    }
+    if (whitePawns > 1) score -= 20 * (whitePawns - 1);
+    if (blackPawns > 1) score += 20 * (blackPawns - 1);
+  }
+  
+  // Passed pawns bonus
+  for (let row = 0; row < 8; row++) {
+    for (let col = 0; col < 8; col++) {
+      const piece = board[row][col];
+      if (piece === 'wP' || piece === 'wS') {
+        if (isPassedPawn(board, row, col, 'w')) {
+          score += 50 + (7 - row) * 10; // Bonus increases with advancement
+        }
+      } else if (piece === 'bP' || piece === 'bS') {
+        if (isPassedPawn(board, row, col, 'b')) {
+          score -= 50 + row * 10;
+        }
+      }
+    }
+  }
+  
+  return score;
+}
+
+function isPassedPawn(board, row, col, color) {
+  const direction = color === 'w' ? -1 : 1;
+  const opponentColor = color === 'w' ? 'b' : 'w';
+  
+  // Check if there are opponent pawns in front
+  for (let checkRow = row + direction; checkRow >= 0 && checkRow <= 7; checkRow += direction) {
+    for (let checkCol = Math.max(0, col - 1); checkCol <= Math.min(7, col + 1); checkCol++) {
+      const piece = board[checkRow][checkCol];
+      if (piece === opponentColor + 'P' || piece === opponentColor + 'S') {
+        return false;
+      }
+    }
+  }
+  
+  return true;
+}
+
+function evaluateKingSafety(board) {
+  let score = 0;
+  
+  // Find kings
+  let whiteKing = null, blackKing = null;
+  for (let row = 0; row < 8; row++) {
+    for (let col = 0; col < 8; col++) {
+      const piece = board[row][col];
+      if (piece === 'wK') whiteKing = {row, col};
+      if (piece === 'bK') blackKing = {row, col};
+    }
+  }
+  
+  if (whiteKing) {
+    const whiteSafety = evaluateKingPosition(board, whiteKing.row, whiteKing.col, 'w');
+    score += whiteSafety;
+  }
+  
+  if (blackKing) {
+    const blackSafety = evaluateKingPosition(board, blackKing.row, blackKing.col, 'b');
+    score -= blackSafety;
+  }
+  
+  return score;
+}
+
+function evaluateKingPosition(board, row, col, color) {
+  let safety = 0;
+  
+  // Count attacking pieces near king
+  const opponentColor = color === 'w' ? 'b' : 'w';
+  let attackers = 0;
+  
+  for (let checkRow = Math.max(0, row - 2); checkRow <= Math.min(7, row + 2); checkRow++) {
+    for (let checkCol = Math.max(0, col - 2); checkCol <= Math.min(7, col + 2); checkCol++) {
+      const piece = board[checkRow][checkCol];
+      if (piece && piece[0] === opponentColor) {
+        if (canPieceAttackSquare({row: checkRow, col: checkCol}, {row, col}, piece)) {
+          attackers++;
+        }
+      }
+    }
+  }
+  
+  safety -= attackers * 15;
+  
+  return safety;
+}
+
+function evaluatePieceActivity(board) {
+  let score = 0;
+  
+  // Count developed pieces
+  let whiteDeveloped = 0, blackDeveloped = 0;
+  
+  for (let row = 0; row < 8; row++) {
+    for (let col = 0; col < 8; col++) {
+      const piece = board[row][col];
+      if (!piece) continue;
+      
+      const color = piece[0];
+      const pieceType = piece[1];
+      
+      // Count pieces that have moved from starting position
+      if (pieceType !== 'P' && pieceType !== 'S') {
+        if (color === 'w' && row < 7) whiteDeveloped++;
+        if (color === 'b' && row > 0) blackDeveloped++;
+      }
+    }
+  }
+  
+  score += (whiteDeveloped - blackDeveloped) * 10;
+  
+  return score;
+}
+
+function minimax(board, depth, isMaximizing, alpha = -Infinity, beta = Infinity) {
+  // Generate board hash for transposition table
+  const boardHash = generateBoardHash(board);
+  
+  // Check transposition table
+  if (transpositionTable.has(boardHash)) {
+    const entry = transpositionTable.get(boardHash);
+    if (entry.depth >= depth) {
+      return entry.score;
+    }
+  }
+  
+  // Base case: depth reached or game over
+  if (depth === 0) {
+    return quiescenceSearch(board, alpha, beta, 2); // Reduced quiescence depth for speed
+  }
+  
+  const currentPlayer = isMaximizing ? botColor : (botColor === 'w' ? 'b' : 'w');
+  const legalMoves = collectAllLegalMoves(currentPlayer);
+  
+  // Check for game over
+  if (legalMoves.length === 0) {
+    if (isKingInCheck(currentPlayer)) {
+      // Checkmate
+      return isMaximizing ? -20000 : 20000;
+    } else {
+      // Stalemate
+      return 0;
+    }
+  }
+  
+  // Sort moves for better move ordering
+  const sortedMoves = sortMoves(board, legalMoves, currentPlayer);
+  
+  if (isMaximizing) {
+    let maxEval = -Infinity;
+    for (const move of sortedMoves) {
+      // Make move
+      const originalPiece = board[move.to.row][move.to.col];
+      const movingPiece = board[move.from.row][move.from.col];
+      board[move.to.row][move.to.col] = movingPiece;
+      board[move.from.row][move.from.col] = null;
+      
+      // Recursive call
+      const eval = minimax(board, depth - 1, false, alpha, beta);
+      maxEval = Math.max(maxEval, eval);
+      alpha = Math.max(alpha, eval);
+      
+      // Undo move
+      board[move.from.row][move.from.col] = movingPiece;
+      board[move.to.row][move.to.col] = originalPiece;
+      
+      // Alpha-beta pruning
+      if (beta <= alpha) break;
+    }
+    
+    // Store in transposition table
+    transpositionTable.set(boardHash, { score: maxEval, depth: depth });
+    return maxEval;
+  } else {
+    let minEval = Infinity;
+    for (const move of sortedMoves) {
+      // Make move
+      const originalPiece = board[move.to.row][move.to.col];
+      const movingPiece = board[move.from.row][move.from.col];
+      board[move.to.row][move.to.col] = movingPiece;
+      board[move.from.row][move.from.col] = null;
+      
+      // Recursive call
+      const eval = minimax(board, depth - 1, true, alpha, beta);
+      minEval = Math.min(minEval, eval);
+      beta = Math.min(beta, eval);
+      
+      // Undo move
+      board[move.from.row][move.from.col] = movingPiece;
+      board[move.to.row][move.to.col] = originalPiece;
+      
+      // Alpha-beta pruning
+      if (beta <= alpha) break;
+    }
+    
+    // Store in transposition table
+    transpositionTable.set(boardHash, { score: minEval, depth: depth });
+    return minEval;
+  }
+}
+
+function quiescenceSearch(board, alpha, beta, depth) {
+  if (depth === 0) {
+    return evaluatePosition(board);
+  }
+  
+  const standPat = evaluatePosition(board);
+  
+  if (standPat >= beta) {
+    return beta;
+  }
+  
+  if (standPat > alpha) {
+    alpha = standPat;
+  }
+  
+  // Only consider captures and checks in quiescence search
+  const captures = collectCaptures(board);
+  
+  for (const move of captures) {
+    // Make move
+    const originalPiece = board[move.to.row][move.to.col];
+    const movingPiece = board[move.from.row][move.from.col];
+    board[move.to.row][move.to.col] = movingPiece;
+    board[move.from.row][move.from.col] = null;
+    
+    // Recursive call
+    const eval = -quiescenceSearch(board, -beta, -alpha, depth - 1);
+    
+    // Undo move
+    board[move.from.row][move.from.col] = movingPiece;
+    board[move.to.row][move.to.col] = originalPiece;
+    
+    if (eval >= beta) {
+      return beta;
+    }
+    
+    if (eval > alpha) {
+      alpha = eval;
+    }
+  }
+  
+  return alpha;
+}
+
+function collectCaptures(board) {
+  const captures = [];
+  const currentPlayer = currentPlayer === 'w' ? 'b' : 'w'; // Opposite of current player
+  
+  for (let row = 0; row < 8; row++) {
+    for (let col = 0; col < 8; col++) {
+      const piece = board[row][col];
+      if (piece && piece[0] === currentPlayer) {
+        for (let toRow = 0; toRow < 8; toRow++) {
+          for (let toCol = 0; toCol < 8; toCol++) {
+            const target = board[toRow][toCol];
+            if (target && target[0] !== currentPlayer) {
+              if (isLegalMove({row, col}, {row: toRow, col: toCol})) {
+                captures.push({ from: {row, col}, to: {row: toRow, col: toCol} });
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  return captures;
+}
+
+function generateBoardHash(board) {
+  let hash = '';
+  for (let row = 0; row < 8; row++) {
+    for (let col = 0; col < 8; col++) {
+      const piece = board[row][col];
+      hash += piece ? piece : '--';
+    }
+  }
+  return hash;
+}
+
+function getBestMove(board, color) {
+  const legalMoves = collectAllLegalMoves(color);
+  if (legalMoves.length === 0) return null;
+  
+  // Sort moves for better move ordering (captures first, then other moves)
+  const sortedMoves = sortMoves(board, legalMoves, color);
+  
+  let bestMove = null;
+  let bestScore = color === botColor ? -Infinity : Infinity;
+  
+  // Optimized iterative deepening with time management
+  const startTime = Date.now();
+  const maxTime = 5000; // 5 seconds max
+  
+  for (let depth = 1; depth <= botDepth; depth++) {
+    let currentBestMove = null;
+    let currentBestScore = color === botColor ? -Infinity : Infinity;
+    
+    for (const move of sortedMoves) {
+      // Check time limit
+      if (Date.now() - startTime > maxTime) {
+        break;
+      }
+      
+      // Make move
+      const originalPiece = board[move.to.row][move.to.col];
+      const movingPiece = board[move.from.row][move.from.col];
+      board[move.to.row][move.to.col] = movingPiece;
+      board[move.from.row][move.from.col] = null;
+      
+      // Evaluate position with reduced depth for speed
+      const searchDepth = Math.min(depth - 1, 8); // Cap search depth for speed
+      const score = minimax(board, searchDepth, color !== botColor);
+      
+      // Undo move
+      board[move.from.row][move.from.col] = movingPiece;
+      board[move.to.row][move.to.col] = originalPiece;
+      
+      // Update best move
+      if (color === botColor) {
+        if (score > currentBestScore) {
+          currentBestScore = score;
+          currentBestMove = move;
+        }
+      } else {
+        if (score < currentBestScore) {
+          currentBestScore = score;
+          currentBestMove = move;
+        }
+      }
+    }
+    
+    // Update global best if we found a better move at this depth
+    if (currentBestMove) {
+      bestMove = currentBestMove;
+      bestScore = currentBestScore;
+    }
+    
+    // Break if we're running out of time
+    if (Date.now() - startTime > maxTime * 0.8) {
+      break;
+    }
+  }
+  
+  return bestMove;
+}
+
+function sortMoves(board, moves, color) {
+  return moves.sort((a, b) => {
+    // Prioritize captures
+    const aCapture = board[a.to.row][a.to.col] ? 1 : 0;
+    const bCapture = board[b.to.row][b.to.col] ? 1 : 0;
+    
+    if (aCapture !== bCapture) {
+      return bCapture - aCapture; // Captures first
+    }
+    
+    // Prioritize captures of higher value pieces
+    if (aCapture && bCapture) {
+      const aValue = getPieceValue(board[a.to.row][a.to.col]);
+      const bValue = getPieceValue(board[b.to.row][b.to.col]);
+      return bValue - aValue;
+    }
+    
+    // Prioritize center moves
+    const aCenter = isCenterMove(a.to);
+    const bCenter = isCenterMove(b.to);
+    if (aCenter !== bCenter) {
+      return bCenter - aCenter;
+    }
+    
+    // Prioritize developing moves
+    const aDevelop = isDevelopingMove(board, a, color);
+    const bDevelop = isDevelopingMove(board, b, color);
+    if (aDevelop !== bDevelop) {
+      return bDevelop - aDevelop;
+    }
+    
+    return 0;
+  });
+}
+
+function getPieceValue(piece) {
+  if (!piece) return 0;
+  return PIECE_VALUES[piece[1]] || 0;
+}
+
+function isCenterMove(square) {
+  const centerSquares = [[3,3], [3,4], [4,3], [4,4]];
+  return centerSquares.some(([row, col]) => 
+    Math.abs(square.row - row) <= 1 && Math.abs(square.col - col) <= 1
+  );
+}
+
+function isDevelopingMove(board, move, color) {
+  const piece = board[move.from.row][move.from.col];
+  if (!piece || piece[0] !== color) return false;
+  
+  const pieceType = piece[1];
+  const fromRow = move.from.row;
+  
+  // Check if piece is moving from starting position
+  if (pieceType === 'N' || pieceType === 'B') {
+    const startingRow = color === 'w' ? 7 : 0;
+    return fromRow === startingRow;
+  }
+  
+  return false;
+}
+
+function makeMinimaxBotMove(color) {
+  if (gameState !== 'playing' && gameState !== 'check') return;
+  if (currentPlayer !== color) return;
+  
+  // Show thinking indicator
+  if (statusDisplay) {
+    statusDisplay.textContent = `${color === 'w' ? 'White' : 'Black'} bot is thinking...`;
+    statusDisplay.style.color = '#666';
+  }
+  
+  // Use setTimeout to prevent UI blocking but with minimal delay
+  setTimeout(() => {
+    const bestMove = getBestMove(board, color);
+    
+    if (!bestMove) {
+      checkGameState();
+      updateStatus();
+      return;
+    }
+    
+    // Execute the best move
+    const moveOutcome = movePiece(bestMove.from, bestMove.to);
+    if (moveOutcome.needsPromotion) {
+      // Auto-promote to queen for the bot
+      board[bestMove.to.row][bestMove.to.col] = color + 'Q';
+      board[bestMove.from.row][bestMove.from.col] = null;
+      currentPlayer = currentPlayer === 'w' ? 'b' : 'w';
+      lastMove = { from: bestMove.from, to: bestMove.to };
+    } else {
+      currentPlayer = currentPlayer === 'w' ? 'b' : 'w';
+      lastMove = { from: bestMove.from, to: bestMove.to };
+    }
+    
+    checkGameState();
+    if (analysisMode) saveCurrentPosition();
+    renderBoard();
+    updateStatus();
+    renderPockets();
+  }, 50); // Reduced delay for faster response
 }
