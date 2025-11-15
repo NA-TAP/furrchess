@@ -1,0 +1,6 @@
+Add rules for all games
+pieces has changed to chess pieces
+create more games like (international)draughts and chopsticks and othellos and some of thier variants aswell
+Add a theme selector
+create better crazyhouse layout, player dropdown add image
+faster bot, bot analysis and bot-generated puzzles and bot icon

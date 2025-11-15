@@ -34,29 +34,29 @@ const UNICODE_PIECES = {
 
 // PNG chess pieces (with fallback to Unicode) - Updated paths
 const PIECES = {
-  wK: 'ui assets/pieces/wK.png',
-  wQ: 'ui assets/pieces/wQ.png',
-  wR: 'ui assets/pieces/wR.png',
-  wB: 'ui assets/pieces/wB.png',
-  wN: 'ui assets/pieces/wN.png',
-  wP: 'ui assets/pieces/wP.png',
-  bK: 'ui assets/pieces/bK.png',
-  bQ: 'ui assets/pieces/bQ.png',
-  bR: 'ui assets/pieces/bR.png',
-  bB: 'ui assets/pieces/bB.png',
-  bN: 'ui assets/pieces/bN.png',
-  bP: 'ui assets/pieces/bP.png',
+  wK: 'ui assets/chess pieces/wK.png',
+  wQ: 'ui assets/chess pieces/wQ.png',
+  wR: 'ui assets/chess pieces/wR.png',
+  wB: 'ui assets/chess pieces/wB.png',
+  wN: 'ui assets/chess pieces/wN.png',
+  wP: 'ui assets/chess pieces/wP.png',
+  bK: 'ui assets/chess pieces/bK.png',
+  bQ: 'ui assets/chess pieces/bQ.png',
+  bR: 'ui assets/chess pieces/bR.png',
+  bB: 'ui assets/chess pieces/bB.png',
+  bN: 'ui assets/chess pieces/bN.png',
+  bP: 'ui assets/chess pieces/bP.png',
   // Capablanca pieces
-  wC: 'ui assets/pieces/wC.png',
-  wA: 'ui assets/pieces/wA.png',
-  bC: 'ui assets/pieces/bC.png',
-  bA: 'ui assets/pieces/bA.png',
+  wC: 'ui assets/chess pieces/wC.png',
+  wA: 'ui assets/chess pieces/wA.png',
+  bC: 'ui assets/chess pieces/bC.png',
+  bA: 'ui assets/chess pieces/bA.png',
   // Berolina pawns
-  wS: 'ui assets/pieces/wS.png',
-  bS: 'ui assets/pieces/bS.png',
+  wS: 'ui assets/chess pieces/wS.png',
+  bS: 'ui assets/chess pieces/bS.png',
   // Knightmate non-royal kings
-  wM: 'ui assets/pieces/wM.png',
-  bM: 'ui assets/pieces/bM.png',
+  wM: 'ui assets/chess pieces/wM.png',
+  bM: 'ui assets/chess pieces/bM.png',
 };
 
 // Initial board setups
@@ -119,6 +119,13 @@ let castling = {
 // Resignation state
 let resignedBy = null; // 'w' or 'b' when someone resigns
 
+// Theme state
+let currentTheme = 'default'; // 'default', 'dark', 'ocean', 'forest', 'sunset'
+
+// Bot analysis state
+let botAnalysisMode = false;
+let botAnalysisDepth = 3;
+
 function initializeUI() {
   // Clear any existing game controls first
   const existingGameControls = gameContainer.querySelector('.game-controls-wrapper');
@@ -149,10 +156,49 @@ function initializeUI() {
   
   controls.appendChild(modeLabel);
   
-  // Bot color selection (only show in bot mode)
+  // Theme selector
+  const themeContainer = document.createElement('div');
+  themeContainer.style.cssText = 'margin: 10px 0; text-align: center;';
+  
+  const themeLabel = document.createElement('label');
+  themeLabel.textContent = 'Theme: ';
+  themeLabel.style.marginRight = '10px';
+  
+  const themeSelect = document.createElement('select');
+  themeSelect.innerHTML = `
+    <option value="default">Default</option>
+    <option value="dark">Dark</option>
+    <option value="ocean">Ocean</option>
+    <option value="forest">Forest</option>
+    <option value="sunset">Sunset</option>
+  `;
+  themeSelect.value = currentTheme;
+  themeSelect.addEventListener('change', (e) => {
+    currentTheme = e.target.value;
+    applyTheme(currentTheme);
+  });
+  
+  themeLabel.appendChild(themeSelect);
+  themeContainer.appendChild(themeLabel);
+  controls.appendChild(themeContainer);
+  
+  // Rules button
+  const rulesButton = document.createElement('button');
+  rulesButton.className = 'action-button';
+  rulesButton.textContent = '📖 Rules';
+  rulesButton.style.marginLeft = '8px';
+  rulesButton.onclick = showRules;
+  controls.appendChild(rulesButton);
+  
+  // Bot color selection (only show in bot mode) with icon
   if (botMode) {
     const botColorContainer = document.createElement('div');
-    botColorContainer.style.cssText = 'margin: 10px 0; text-align: center;';
+    botColorContainer.style.cssText = 'margin: 10px 0; text-align: center; display: flex; align-items: center; justify-content: center; gap: 10px;';
+    
+    // Bot icon
+    const botIcon = document.createElement('div');
+    botIcon.textContent = '🤖';
+    botIcon.style.cssText = 'font-size: 24px;';
     
     const botColorLabel = document.createElement('label');
     botColorLabel.textContent = 'Bot Color: ';
@@ -170,8 +216,18 @@ function initializeUI() {
       updateStatus();
     });
     
+    botColorContainer.appendChild(botIcon);
     botColorContainer.appendChild(botColorLabel);
     botColorContainer.appendChild(botColorSelect);
+    
+    // Bot analysis button
+    const botAnalysisButton = document.createElement('button');
+    botAnalysisButton.className = 'action-button';
+    botAnalysisButton.textContent = '🔍 Bot Analysis';
+    botAnalysisButton.style.marginLeft = '10px';
+    botAnalysisButton.onclick = toggleBotAnalysis;
+    botColorContainer.appendChild(botAnalysisButton);
+    
     controls.appendChild(botColorContainer);
     
     // Bot depth selection
@@ -199,7 +255,7 @@ function initializeUI() {
       <option value="18">~3200 ELO (Depth 18)</option>
       <option value="20">~3400 ELO (Depth 20)</option>
       <option value="22">~3600 ELO (Depth 22)</option>
-      <option value="25" selected>~3800+ ELO (Depth 25)</option>
+      <option value="25" selected>~3800+ ELO (Depth 25)</option> 
     `;
     botDepthSelect.value = botDepth;
     botDepthSelect.addEventListener('change', (e) => {
@@ -241,16 +297,60 @@ function initializeUI() {
   newGameButton.onclick = analysisMode ? startNewAnalysis : startNewGame;
   controls.appendChild(newGameButton);
 
-  // Crazyhouse pockets UI
+  // Crazyhouse pockets UI with improved layout
   pocketsContainer = document.createElement('div');
   pocketsContainer.id = 'pockets';
-  pocketsContainer.style.cssText = 'display:flex; gap:24px; justify-content:center; align-items:center; margin: 10px 0;';
+  pocketsContainer.style.cssText = 'display:flex; flex-direction: column; gap:12px; justify-content:center; align-items:center; margin: 10px 0; padding: 15px; background: #f5f5dc; border: 2px solid #3e3e3e; border-radius: 8px;';
+  
+  // Player info header
+  const playerInfo = document.createElement('div');
+  playerInfo.style.cssText = 'display: flex; gap: 20px; align-items: center; margin-bottom: 10px;';
+  
+  const whitePlayerDiv = document.createElement('div');
+  whitePlayerDiv.style.cssText = 'display: flex; align-items: center; gap: 8px;';
+  const whiteLabel = document.createElement('strong');
+  whiteLabel.textContent = 'White:';
+  whiteLabel.style.color = '#3e3e3e';
+  whitePlayerDiv.appendChild(whiteLabel);
+  const whitePlayerSelect = document.createElement('select');
+  whitePlayerSelect.innerHTML = `
+    <option value="human">Human</option>
+    <option value="bot">Bot</option>
+  `;
+  whitePlayerSelect.style.cssText = 'padding: 4px 8px; border: 1px solid #3e3e3e; border-radius: 4px;';
+  whitePlayerDiv.appendChild(whitePlayerSelect);
+  
+  const blackPlayerDiv = document.createElement('div');
+  blackPlayerDiv.style.cssText = 'display: flex; align-items: center; gap: 8px;';
+  const blackLabel = document.createElement('strong');
+  blackLabel.textContent = 'Black:';
+  blackLabel.style.color = '#3e3e3e';
+  blackPlayerDiv.appendChild(blackLabel);
+  const blackPlayerSelect = document.createElement('select');
+  blackPlayerSelect.innerHTML = `
+    <option value="human">Human</option>
+    <option value="bot">Bot</option>
+  `;
+  blackPlayerSelect.style.cssText = 'padding: 4px 8px; border: 1px solid #3e3e3e; border-radius: 4px;';
+  blackPlayerDiv.appendChild(blackPlayerSelect);
+  
+  playerInfo.appendChild(whitePlayerDiv);
+  playerInfo.appendChild(blackPlayerDiv);
+  pocketsContainer.appendChild(playerInfo);
+  
+  // Pockets display
+  const pocketsDisplay = document.createElement('div');
+  pocketsDisplay.style.cssText = 'display:flex; gap:24px; justify-content:center; align-items:center; width: 100%;';
   const whitePocket = document.createElement('div');
   whitePocket.id = 'white-pocket';
+  whitePocket.style.cssText = 'display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px; background: #fff; border: 2px solid #3e3e3e; border-radius: 4px; min-height: 50px;';
   const blackPocket = document.createElement('div');
   blackPocket.id = 'black-pocket';
-  pocketsContainer.appendChild(whitePocket);
-  pocketsContainer.appendChild(blackPocket);
+  blackPocket.style.cssText = 'display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px; background: #333; border: 2px solid #3e3e3e; border-radius: 4px; min-height: 50px;';
+  pocketsDisplay.appendChild(whitePocket);
+  pocketsDisplay.appendChild(blackPocket);
+  pocketsContainer.appendChild(pocketsDisplay);
+  
   controls.appendChild(pocketsContainer);
 
   // Analysis controls
@@ -418,7 +518,24 @@ function onSquareClick(row, col) {
     return;
   }
   
-  if (gameState === 'checkmate' || gameState === 'stalemate' || gameState === 'resigned') return;
+  // Handle puzzle mode
+  if (puzzleMode) {
+    // Allow normal moves in puzzle mode
+    // Puzzle completion is checked after moves
+  }
+  
+  if (gameState === 'checkmate' || gameState === 'stalemate' || gameState === 'resigned') {
+    // In puzzle mode, checkmate means puzzle solved
+    if (puzzleMode && gameState === 'checkmate') {
+      setTimeout(() => {
+        alert('Puzzle solved! 🎉');
+        generatePuzzle();
+        renderBoard();
+        updateStatus();
+      }, 100);
+    }
+    return;
+  }
   
   const piece = board[row][col];
 
@@ -483,6 +600,17 @@ function onSquareClick(row, col) {
       renderBoard();
       updateStatus();
       renderPockets();
+      
+      // Check puzzle completion
+      if (puzzleMode && gameState === 'checkmate') {
+        setTimeout(() => {
+          alert('Puzzle solved! 🎉');
+          generatePuzzle();
+          renderBoard();
+          updateStatus();
+        }, 100);
+      }
+      
       triggerBotMoveIfNeeded();
       return;
     } else {
@@ -984,8 +1112,22 @@ function renderPockets() {
   pocketsContainer.style.display = gameMode === 'crazyhouse' ? 'flex' : 'none';
   const whiteDiv = document.getElementById('white-pocket');
   const blackDiv = document.getElementById('black-pocket');
-  whiteDiv.innerHTML = '<strong>White pocket:</strong> ';
-  blackDiv.innerHTML = '<strong>Black pocket:</strong> ';
+  if (!whiteDiv || !blackDiv) return;
+  
+  whiteDiv.innerHTML = '';
+  blackDiv.innerHTML = '';
+  
+  // Add labels with images
+  const whiteLabel = document.createElement('div');
+  whiteLabel.style.cssText = 'width: 100%; margin-bottom: 5px; font-weight: bold; color: #3e3e3e;';
+  whiteLabel.textContent = 'White Pocket:';
+  whiteDiv.appendChild(whiteLabel);
+  
+  const blackLabel = document.createElement('div');
+  blackLabel.style.cssText = 'width: 100%; margin-bottom: 5px; font-weight: bold; color: #fff;';
+  blackLabel.textContent = 'Black Pocket:';
+  blackDiv.appendChild(blackLabel);
+  
   renderPocketFor('w', whiteDiv);
   renderPocketFor('b', blackDiv);
 }
@@ -1417,8 +1559,7 @@ function handleMenuSelection(mode) {
       startGame('bot');
       break;
     case 'puzzles':
-      // TODO: Implement puzzles with FEN
-      alert('Puzzles feature coming soon!');
+      startPuzzleMode();
       break;
     case 'analysis':
       startGame('analysis');
@@ -2836,7 +2977,12 @@ function getBestMove(board, color) {
   
   // Optimized iterative deepening with time management
   const startTime = Date.now();
-  const maxTime = 5000; // 5 seconds max
+  const maxTime = botDepth <= 5 ? 2000 : botDepth <= 10 ? 3000 : 5000; // Adaptive time based on depth
+  
+  // Clear transposition table periodically for memory management
+  if (transpositionTable.size > 10000) {
+    transpositionTable.clear();
+  }
   
   for (let depth = 1; depth <= botDepth; depth++) {
     let currentBestMove = null;
@@ -2854,9 +3000,9 @@ function getBestMove(board, color) {
       board[move.to.row][move.to.col] = movingPiece;
       board[move.from.row][move.from.col] = null;
       
-      // Evaluate position with reduced depth for speed
-      const searchDepth = Math.min(depth - 1, 8); // Cap search depth for speed
-      const score = minimax(board, searchDepth, color !== botColor);
+      // Evaluate position with adaptive depth reduction
+      const searchDepth = Math.min(depth, Math.max(1, Math.floor(botDepth * 0.6))); // Adaptive depth
+      const score = minimax(board, searchDepth, color !== botColor, -Infinity, Infinity);
       
       // Undo move
       board[move.from.row][move.from.col] = movingPiece;
@@ -2882,8 +3028,8 @@ function getBestMove(board, color) {
       bestScore = currentBestScore;
     }
     
-    // Break if we're running out of time
-    if (Date.now() - startTime > maxTime * 0.8) {
+    // Break if we're running out of time or found a winning move
+    if (Date.now() - startTime > maxTime * 0.8 || Math.abs(bestScore) > 10000) {
       break;
     }
   }
@@ -2993,4 +3139,345 @@ function makeMinimaxBotMove(color) {
     updateStatus();
     renderPockets();
   }, 50); // Reduced delay for faster response
+}
+
+// ----- Rules Display System -----
+function showRules() {
+  const rules = getRulesForMode(gameMode);
+  
+  const dialog = document.createElement('div');
+  dialog.className = 'promotion-dialog';
+  dialog.style.cssText = 'max-width: 600px; max-height: 80vh; overflow-y: auto;';
+  
+  dialog.innerHTML = `
+    <h3>Rules: ${rules.title}</h3>
+    <div style="text-align: left; padding: 10px; line-height: 1.6;">
+      ${rules.content}
+    </div>
+    <button class="promotion-button" onclick="document.body.removeChild(this.parentNode)" style="margin-top: 15px;">Close</button>
+  `;
+  
+  document.body.appendChild(dialog);
+}
+
+function getRulesForMode(mode) {
+  const rules = {
+    standard: {
+      title: 'Standard Chess',
+      content: `
+        <h4>Objective:</h4>
+        <p>Checkmate your opponent's king.</p>
+        
+        <h4>Piece Movement:</h4>
+        <ul>
+          <li><strong>Pawn:</strong> Moves forward one square (two on first move), captures diagonally</li>
+          <li><strong>Rook:</strong> Moves horizontally or vertically any number of squares</li>
+          <li><strong>Knight:</strong> Moves in an L-shape (2 squares one direction, 1 square perpendicular)</li>
+          <li><strong>Bishop:</strong> Moves diagonally any number of squares</li>
+          <li><strong>Queen:</strong> Moves any number of squares in any direction</li>
+          <li><strong>King:</strong> Moves one square in any direction</li>
+        </ul>
+        
+        <h4>Special Rules:</h4>
+        <ul>
+          <li><strong>Castling:</strong> Move king two squares toward a rook, then move the rook to the square the king crossed</li>
+          <li><strong>En Passant:</strong> Capture a pawn that just moved two squares forward</li>
+          <li><strong>Promotion:</strong> Pawns reaching the 8th rank promote to any piece (usually Queen)</li>
+        </ul>
+      `
+    },
+    capablanca: {
+      title: 'Capablanca Chess',
+      content: `
+        <h4>Objective:</h4>
+        <p>Checkmate your opponent's king on a 10x8 board.</p>
+        
+        <h4>New Pieces:</h4>
+        <ul>
+          <li><strong>Chancellor (C):</strong> Combines Rook and Knight movement</li>
+          <li><strong>Archbishop (A):</strong> Combines Bishop and Knight movement</li>
+        </ul>
+        
+        <h4>Setup:</h4>
+        <p>Back rank: R-N-A-B-Q-K-B-C-N-R (10 pieces)</p>
+      `
+    },
+    chess960: {
+      title: 'Chess960 (Fischer Random)',
+      content: `
+        <h4>Objective:</h4>
+        <p>Same as standard chess, but with randomized starting positions.</p>
+        
+        <h4>Rules:</h4>
+        <ul>
+          <li>Back rank pieces are randomly arranged</li>
+          <li>King must be between the two rooks</li>
+          <li>Bishops must be on opposite colors</li>
+          <li>All other standard chess rules apply</li>
+        </ul>
+      `
+    },
+    crazyhouse: {
+      title: 'Crazyhouse',
+      content: `
+        <h4>Objective:</h4>
+        <p>Checkmate your opponent's king.</p>
+        
+        <h4>Special Rules:</h4>
+        <ul>
+          <li>When you capture a piece, it goes into your "pocket"</li>
+          <li>You can drop pieces from your pocket onto empty squares instead of moving</li>
+          <li>Pawns cannot be dropped on the first or last rank</li>
+          <li>Dropped pieces cannot give checkmate immediately</li>
+          <li>All standard chess rules still apply</li>
+        </ul>
+      `
+    },
+    giveaway: {
+      title: 'Antichess (Giveaway)',
+      content: `
+        <h4>Objective:</h4>
+        <p>Lose all your pieces or get checkmated!</p>
+        
+        <h4>Rules:</h4>
+        <ul>
+          <li>You MUST capture if possible</li>
+          <li>Checks are ignored (you can move into check)</li>
+          <li>You win by losing all pieces or being checkmated</li>
+          <li>Stalemate is a win for the stalemated player</li>
+        </ul>
+      `
+    },
+    berolina: {
+      title: 'Berolina Chess',
+      content: `
+        <h4>Objective:</h4>
+        <p>Checkmate your opponent's king.</p>
+        
+        <h4>Special Pawns:</h4>
+        <ul>
+          <li>Berolina pawns move diagonally forward (instead of straight)</li>
+          <li>They capture straight forward (instead of diagonally)</li>
+          <li>All other rules are the same as standard chess</li>
+        </ul>
+      `
+    },
+    knightmate: {
+      title: 'Knightmate',
+      content: `
+        <h4>Objective:</h4>
+        <p>Checkmate your opponent's royal knight (the piece that was originally a knight).</p>
+        
+        <h4>Special Rules:</h4>
+        <ul>
+          <li>The knights become the royal pieces (must be protected)</li>
+          <li>The original kings become non-royal pieces (can be captured)</li>
+          <li>You win by checkmating the royal knight</li>
+          <li>All other standard chess rules apply</li>
+        </ul>
+      `
+    },
+    atomic: {
+      title: 'Atomic Chess',
+      content: `
+        <h4>Objective:</h4>
+        <p>Capture your opponent's king (which causes an explosion).</p>
+        
+        <h4>Special Rules:</h4>
+        <ul>
+          <li>When a piece is captured, it explodes</li>
+          <li>The explosion removes all non-pawn pieces in the 8 surrounding squares</li>
+          <li>If a king is in the explosion, that side loses immediately</li>
+          <li>Kings cannot capture (to prevent self-destruction)</li>
+          <li>You win by causing your opponent's king to explode</li>
+        </ul>
+      `
+    }
+  };
+  
+  return rules[mode] || rules.standard;
+}
+
+// ----- Theme System -----
+function applyTheme(theme) {
+  const body = document.body;
+  const root = document.documentElement;
+  
+  // Remove existing theme classes
+  body.classList.remove('theme-default', 'theme-dark', 'theme-ocean', 'theme-forest', 'theme-sunset');
+  
+  // Apply new theme
+  body.classList.add(`theme-${theme}`);
+  
+  // Store theme preference
+  localStorage.setItem('chessTheme', theme);
+  
+  // Apply CSS variables if needed
+  switch(theme) {
+    case 'dark':
+      body.style.background = '#1a1a1a';
+      break;
+    case 'ocean':
+      body.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+      break;
+    case 'forest':
+      body.style.background = 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)';
+      break;
+    case 'sunset':
+      body.style.background = 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)';
+      break;
+    default:
+      body.style.background = '#7ec850';
+  }
+}
+
+// Load saved theme on page load
+if (typeof window !== 'undefined') {
+  const savedTheme = localStorage.getItem('chessTheme');
+  if (savedTheme) {
+    currentTheme = savedTheme;
+    applyTheme(savedTheme);
+  }
+}
+
+// ----- Bot Analysis System -----
+function toggleBotAnalysis() {
+  botAnalysisMode = !botAnalysisMode;
+  
+  if (botAnalysisMode) {
+    // Show analysis panel
+    showBotAnalysis();
+  } else {
+    // Hide analysis panel
+    const analysisPanel = document.getElementById('bot-analysis-panel');
+    if (analysisPanel) {
+      analysisPanel.remove();
+    }
+  }
+}
+
+function showBotAnalysis() {
+  // Remove existing panel
+  const existing = document.getElementById('bot-analysis-panel');
+  if (existing) existing.remove();
+  
+  const panel = document.createElement('div');
+  panel.id = 'bot-analysis-panel';
+  panel.style.cssText = 'position: fixed; top: 20px; right: 20px; width: 300px; background: white; border: 3px solid #3e3e3e; border-radius: 8px; padding: 15px; z-index: 1000; max-height: 400px; overflow-y: auto;';
+  
+  panel.innerHTML = `
+    <h3 style="margin: 0 0 10px 0;">Bot Analysis</h3>
+    <div id="bot-analysis-content">Analyzing position...</div>
+    <button class="action-button" onclick="document.getElementById('bot-analysis-panel').remove(); botAnalysisMode = false;" style="margin-top: 10px; width: 100%;">Close</button>
+  `;
+  
+  document.body.appendChild(panel);
+  
+  // Perform analysis
+  analyzeCurrentPosition();
+}
+
+function analyzeCurrentPosition() {
+  const content = document.getElementById('bot-analysis-content');
+  if (!content) return;
+  
+  content.innerHTML = 'Analyzing...';
+  
+  setTimeout(() => {
+    const legalMoves = collectAllLegalMoves(currentPlayer);
+    const bestMove = getBestMove(board, currentPlayer);
+    
+    let analysis = `<p><strong>Legal moves:</strong> ${legalMoves.length}</p>`;
+    
+    if (bestMove) {
+      const fromSquare = String.fromCharCode(97 + bestMove.from.col) + (8 - bestMove.from.row);
+      const toSquare = String.fromCharCode(97 + bestMove.to.col) + (8 - bestMove.to.row);
+      analysis += `<p><strong>Best move:</strong> ${fromSquare} → ${toSquare}</p>`;
+    }
+    
+    // Evaluate position
+    const evaluation = evaluatePosition(board);
+    const evalText = evaluation > 0 ? `+${(evaluation / 100).toFixed(1)} (White advantage)` : 
+                     evaluation < 0 ? `${(evaluation / 100).toFixed(1)} (Black advantage)` : 
+                     '0.0 (Equal)';
+    analysis += `<p><strong>Evaluation:</strong> ${evalText}</p>`;
+    
+    // Check status
+    if (isRoyalInCheck(currentPlayer)) {
+      analysis += `<p style="color: #ff4444;"><strong>Status:</strong> In Check!</p>`;
+    } else {
+      analysis += `<p><strong>Status:</strong> Normal</p>`;
+    }
+    
+    content.innerHTML = analysis;
+  }, 100);
+}
+
+// ----- Puzzle Generation -----
+let puzzleMode = false;
+let currentPuzzle = null;
+let puzzleSolution = null;
+
+function startPuzzleMode() {
+  puzzleMode = true;
+  analysisMode = false;
+  botMode = false;
+  gameMode = 'standard';
+  boardFlipped = false;
+  
+  // Generate a puzzle
+  generatePuzzle();
+  
+  // Show game container
+  selectionMenu.style.display = 'none';
+  gameContainer.style.display = 'flex';
+  
+  // Initialize UI
+  initializeUI();
+  renderBoard();
+  updateStatus();
+  renderPockets();
+}
+
+function generatePuzzle() {
+  // Simple puzzle positions (mate in 2-3 moves)
+  const puzzles = [
+    {
+      fen: 'r1bqkb1r/pppp1ppp/2n2n2/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4',
+      solution: ['Bxc6', 'bxc6', 'Nxe5'],
+      hint: 'Look for a discovered attack'
+    },
+    {
+      fen: 'r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4',
+      solution: ['Bxf7+', 'Kxf7', 'Nxe5+'],
+      hint: 'Sacrifice the bishop for a strong attack'
+    },
+    {
+      fen: 'rnbqkb1r/pppp1ppp/5n2/4p3/2B1P3/8/PPPP1PPP/RNBQK1NR w KQkq - 4 4',
+      solution: ['Bxf7+', 'Kxf7', 'Nxe5+'],
+      hint: 'Fork the king and a piece'
+    }
+  ];
+  
+  // Select random puzzle
+  currentPuzzle = puzzles[Math.floor(Math.random() * puzzles.length)];
+  puzzleSolution = currentPuzzle.solution;
+  
+  // Load puzzle position
+  const parsedBoard = parseFEN(currentPuzzle.fen);
+  if (parsedBoard) {
+    board = parsedBoard;
+    currentPlayer = 'w';
+    selected = null;
+    lastMove = null;
+    enPassantTarget = null;
+    gameState = 'playing';
+    initializeCastlingRights();
+    
+    // Show puzzle info
+    if (statusDisplay) {
+      statusDisplay.textContent = `Puzzle: ${currentPuzzle.hint}`;
+      statusDisplay.style.color = '#0066cc';
+    }
+  }
 }
