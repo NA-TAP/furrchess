@@ -7,6 +7,10 @@ body {
   margin: 0;
   padding: 0;
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  touch-action: manipulation; /* Better touch responsiveness */
+  overflow-x: hidden; /* Prevent horizontal scroll on mobile */
 }
 
 h1 {
@@ -164,6 +168,8 @@ h1 {
   border: 2px solid #3e3e3e;
   box-sizing: border-box;
   font-family: 'Minecraftia', 'Press Start 2P', 'Courier New', Courier, monospace;
+  touch-action: manipulation; /* Better touch responsiveness */
+  -webkit-tap-highlight-color: transparent; /* Removes tap highlight on mobile */
 }
 
 .square.white {
@@ -185,6 +191,11 @@ h1 {
   box-shadow: 0 0 0 3px #ffe066 inset;
 }
 
+/* Visual feedback during drag */
+.square.drag-over {
+  background-color: rgba(255, 224, 102, 0.5) !important;
+}
+
 .square.in-check {
   box-shadow: 0 0 0 3px #ff4444 inset;
   animation: pulse 1s infinite;
@@ -200,6 +211,13 @@ h1 {
   width: 50px;
   height: 50px;
   object-fit: contain;
+  cursor: grab; /* Show grab cursor when hovering over draggable piece */
+  user-select: none; /* Prevent text selection during drag */
+  -webkit-user-drag: element; /* Enable dragging on WebKit */
+}
+
+.piece-img:active {
+  cursor: grabbing; /* Show grabbing cursor while dragging */
 }
 
 .piece-unicode {
@@ -207,6 +225,13 @@ h1 {
   font-weight: bold;
   text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
   color: #333;
+  cursor: grab; /* Show grab cursor when hovering over draggable piece */
+  user-select: none; /* Prevent text selection during drag */
+  -webkit-user-drag: element; /* Enable dragging on WebKit */
+}
+
+.piece-unicode:active {
+  cursor: grabbing; /* Show grabbing cursor while dragging */
 }
 
 /* White pieces */
@@ -505,6 +530,9 @@ label {
   cursor: pointer;
   transition: all 0.2s ease;
   box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  touch-action: manipulation; /* Prevents double-tap zoom on mobile */
+  -webkit-tap-highlight-color: transparent; /* Removes tap highlight on mobile */
+  user-select: none; /* Prevents text selection on buttons */
 }
 
 .auth-button:hover {
@@ -707,8 +735,214 @@ label {
   text-align: center;
 }
 
-/* Responsive adjustments for board editor */
+/* Responsive adjustments for mobile devices */
 @media (max-width: 768px) {
+  /* Header adjustments */
+  #header-container {
+    flex-direction: column;
+    gap: 15px;
+    padding: 10px 15px !important;
+    width: 100%;
+    max-width: 100% !important;
+  }
+  
+  h1 {
+    font-size: 18px !important;
+    margin: 12px 0 8px 0 !important;
+    text-align: center;
+  }
+  
+  #user-section {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px !important;
+    width: 100%;
+  }
+  
+  /* User display */
+  #user-display {
+    font-size: 10px !important;
+    text-align: center;
+    width: 100%;
+    margin-bottom: 5px;
+  }
+  
+  /* Auth buttons - mobile friendly */
+  .auth-button {
+    font-size: 10px !important;
+    padding: 8px 12px !important;
+    min-height: 36px;
+    white-space: nowrap;
+    flex: 0 1 auto;
+  }
+  
+  /* Hide export/import buttons on very small screens, show icons only */
+  @media (max-width: 480px) {
+    #export-data-btn::before {
+      content: "📥";
+    }
+    #export-data-btn {
+      font-size: 0 !important;
+      padding: 8px !important;
+      width: 36px;
+      height: 36px;
+    }
+    
+    #import-data-btn::before {
+      content: "📤";
+    }
+    #import-data-btn {
+      font-size: 0 !important;
+      padding: 8px !important;
+      width: 36px;
+      height: 36px;
+    }
+    
+    #delete-account-btn::before {
+      content: "🗑️";
+    }
+    #delete-account-btn {
+      font-size: 0 !important;
+      padding: 8px !important;
+      width: 36px;
+      height: 36px;
+    }
+    
+    #login-btn {
+      font-size: 10px !important;
+      padding: 8px 16px !important;
+    }
+    
+    #signup-btn {
+      font-size: 10px !important;
+      padding: 8px 16px !important;
+    }
+    
+    #logout-btn {
+      font-size: 10px !important;
+      padding: 8px 16px !important;
+    }
+  }
+  
+  /* Menu grid adjustments */
+  .menu-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 15px !important;
+    padding: 10px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  
+  .menu-container {
+    padding: 10px !important;
+    max-width: 100% !important;
+  }
+  
+  .menu-item {
+    min-height: 100px !important;
+    padding: 15px !important;
+    touch-action: manipulation; /* Better touch responsiveness */
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  .menu-text {
+    font-size: 12px !important;
+  }
+  
+  .menu-icon {
+    width: 40px !important;
+    height: 40px !important;
+  }
+  
+  /* Very small screens - single column menu */
+  @media (max-width: 400px) {
+    .menu-grid {
+      grid-template-columns: 1fr !important;
+      gap: 10px !important;
+    }
+    
+    .menu-item {
+      min-height: 80px !important;
+      padding: 12px !important;
+    }
+  }
+  
+  /* Auth modal - mobile friendly */
+  .auth-modal {
+    padding: 10px;
+    overflow-y: auto; /* Allow scrolling on small screens */
+    -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+  }
+  
+  .auth-modal-content {
+    margin: 5% auto !important;
+    width: 95% !important;
+    max-width: 95% !important;
+    border-radius: 10px;
+    max-height: 90vh; /* Prevent modal from being taller than screen */
+    overflow-y: auto; /* Allow scrolling if content is too tall */
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .auth-close {
+    font-size: 28px !important;
+    right: 10px !important;
+    top: 8px !important;
+  }
+  
+  .auth-tabs {
+    flex-direction: row;
+  }
+  
+  .auth-tab {
+    font-size: 11px !important;
+    padding: 12px 10px !important;
+    min-height: 44px; /* Touch-friendly */
+  }
+  
+  .auth-form {
+    padding: 20px 15px !important;
+  }
+  
+  .auth-form h2 {
+    font-size: 16px !important;
+    margin-bottom: 15px !important;
+  }
+  
+  .auth-form-group {
+    margin-bottom: 15px !important;
+  }
+  
+  .auth-form-group label {
+    font-size: 11px !important;
+    margin-bottom: 6px !important;
+  }
+  
+  .auth-form-group input {
+    font-size: 16px !important; /* Prevents zoom on iOS */
+    padding: 12px !important;
+    min-height: 44px; /* Touch-friendly */
+    width: 100%;
+    box-sizing: border-box;
+  }
+  
+  .auth-submit-btn {
+    font-size: 13px !important;
+    padding: 14px !important;
+    min-height: 48px; /* Touch-friendly */
+    width: 100%;
+    margin-top: 10px !important;
+  }
+  
+  .auth-error,
+  .auth-success {
+    font-size: 10px !important;
+    padding: 10px !important;
+    margin-bottom: 15px !important;
+  }
+  
+  /* Board editor responsive */
   .board-editor-controls {
     flex-direction: column;
   }
@@ -716,6 +950,7 @@ label {
   .board-editor-controls .action-button {
     width: 100%;
     max-width: none;
+    min-height: 44px; /* Touch-friendly */
   }
   
   #piece-selection {
@@ -739,52 +974,44 @@ label {
     right: 10px !important;
   }
   
-  /* Responsive auth modal */
-  .auth-modal-content {
-    margin: 20% auto;
-    width: 95%;
-    max-width: none;
-  }
-  
-  .auth-form {
-    padding: 20px;
-  }
-  
-  .auth-form h2 {
-    font-size: 16px;
-  }
-  
-  .auth-tab {
-    font-size: 12px;
-    padding: 12px 15px;
-  }
-  
-  .auth-form-group input {
-    font-size: 11px;
-    padding: 10px;
-  }
-  
-  .auth-submit-btn {
-    font-size: 12px;
-    padding: 10px;
-  }
-  
-  #header-container {
-    flex-direction: column;
-    gap: 10px;
-  }
-  
-  #user-section {
+  /* Game controls */
+  .game-controls {
     flex-wrap: wrap;
+    gap: 10px;
     justify-content: center;
   }
   
-  .auth-button {
-    font-size: 11px;
-    padding: 6px 12px;
+  .control-button {
+    font-size: 12px !important;
+    padding: 10px 16px !important;
+    min-height: 44px; /* Touch-friendly */
   }
   
-  #user-display {
-    font-size: 10px;
+  /* Square size adjustments for mobile */
+  .square {
+    width: 40px !important;
+    height: 40px !important;
+  }
+  
+  .piece-img {
+    width: 35px !important;
+    height: 35px !important;
+  }
+  
+  .piece-unicode {
+    font-size: 28px !important;
+  }
+  
+  /* Select elements */
+  select {
+    font-size: 12px !important;
+    padding: 10px !important;
+    min-height: 44px; /* Touch-friendly */
+  }
+  
+  .action-button {
+    font-size: 11px !important;
+    padding: 8px 12px !important;
+    min-height: 36px; /* Touch-friendly */
   }
 }

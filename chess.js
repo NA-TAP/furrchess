@@ -9,6 +9,7 @@ let boardFlipped = false; // Track board orientation
 let botMode = false; // If true, Black is controlled by a random bot
 let winSound = null; // applause sound
 let winSoundPlayed = false; // ensure single play per game end
+let draggingFrom = null; // Track drag source during drag operation
 
 // Analysis mode variables
 let moveHistory = []; // Array to store all moves
@@ -510,6 +511,95 @@ function updateStatus() {
 }
 
 
+
+// Handle drag and drop move
+function handleDragAndDrop(from, to) {
+  // Handle board editor mode - don't allow drag in editor mode
+  if (boardEditorMode) {
+    return;
+  }
+  
+  // Handle puzzle mode
+  if (puzzleMode) {
+    // Allow normal moves in puzzle mode
+    // Puzzle completion is checked after moves
+  }
+  
+  if (gameState === 'checkmate' || gameState === 'stalemate' || gameState === 'resigned') {
+    // In puzzle mode, checkmate means puzzle solved
+    if (puzzleMode && gameState === 'checkmate') {
+      setTimeout(() => {
+        alert('Puzzle solved! 🎉');
+        generatePuzzle();
+        renderBoard();
+        updateStatus();
+      }, 100);
+    }
+    return;
+  }
+  
+  const piece = board[from.row][from.col];
+  
+  // Check if piece exists and belongs to current player
+  if (!piece || piece[0] !== currentPlayer) {
+    selected = null;
+    renderBoard();
+    return;
+  }
+  
+  // Check if trying to drop on same square
+  if (from.row === to.row && from.col === to.col) {
+    selected = null;
+    renderBoard();
+    return;
+  }
+  
+  // Check if move is legal
+  if (isLegalMove(from, to)) {
+    const moveResult = movePiece(from, to);
+    
+    // Handle promotion
+    if (moveResult.needsPromotion) {
+      // Move pawn first to avoid duplicate piece (fix infinite promotion glitch)
+      const fromPos = from;
+      const movingPiece = board[fromPos.row][fromPos.col];
+      board[moveResult.promotionSquare.row][moveResult.promotionSquare.col] = movingPiece;
+      board[fromPos.row][fromPos.col] = null;
+      selected = null;
+      showPromotionDialog(moveResult.promotionSquare, movingPiece);
+      return;
+    }
+    
+    selected = null;
+    currentPlayer = currentPlayer === 'w' ? 'b' : 'w';
+    lastMove = {from: from, to: to};
+    
+    // Check game state
+    checkGameState();
+    if (analysisMode) saveCurrentPosition();
+    renderBoard();
+    updateStatus();
+    renderPockets();
+    
+    // Check puzzle completion
+    if (puzzleMode && gameState === 'checkmate') {
+      setTimeout(() => {
+        alert('Puzzle solved! 🎉');
+        generatePuzzle();
+        renderBoard();
+        updateStatus();
+      }, 100);
+    }
+    
+    triggerBotMoveIfNeeded();
+    return;
+  } else {
+    // Illegal move - reset selection
+    selected = null;
+    renderBoard();
+    return;
+  }
+}
 
 function onSquareClick(row, col) {
   // Handle board editor mode
@@ -1773,15 +1863,111 @@ function renderBoard() {
         img.src = PIECES[piece];
         img.alt = piece;
         img.className = 'piece-img';
+        img.draggable = true; // Enable drag and drop
+        img.dataset.row = row;
+        img.dataset.col = col;
+        img.dataset.piece = piece;
+        
+        // Drag start - store piece info
+        img.addEventListener('dragstart', function(e) {
+          if (boardEditorMode || puzzleMode || gameState === 'checkmate' || gameState === 'stalemate' || gameState === 'resigned') {
+            e.preventDefault();
+            return;
+          }
+          if (piece[0] !== currentPlayer) {
+            e.preventDefault();
+            return;
+          }
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', `${row},${col}`);
+          // Store drag source globally for dragover checks
+          draggingFrom = {row, col};
+          this.style.opacity = '0.5';
+          // Set selected for visual feedback
+          selected = {row, col};
+          renderBoard();
+        });
+        
+        // Drag end - reset opacity and drag state
+        img.addEventListener('dragend', function(e) {
+          this.style.opacity = '1';
+          draggingFrom = null;
+        });
+        
         img.onerror = function() {
           this.style.display = 'none';
           const unicodeSpan = document.createElement('span');
           unicodeSpan.textContent = UNICODE_PIECES[piece] || piece[1];
           unicodeSpan.className = 'piece-unicode';
+          unicodeSpan.draggable = true; // Enable drag for unicode fallback too
+          unicodeSpan.dataset.row = row;
+          unicodeSpan.dataset.col = col;
+          unicodeSpan.dataset.piece = piece;
+          
+          // Drag handlers for unicode fallback
+          unicodeSpan.addEventListener('dragstart', function(e) {
+            if (boardEditorMode || puzzleMode || gameState === 'checkmate' || gameState === 'stalemate' || gameState === 'resigned') {
+              e.preventDefault();
+              return;
+            }
+            if (piece[0] !== currentPlayer) {
+              e.preventDefault();
+              return;
+            }
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', `${row},${col}`);
+            // Store drag source globally for dragover checks
+            draggingFrom = {row, col};
+            this.style.opacity = '0.5';
+            selected = {row, col};
+            renderBoard();
+          });
+          
+          unicodeSpan.addEventListener('dragend', function(e) {
+            this.style.opacity = '1';
+            draggingFrom = null;
+          });
+          
           this.parentNode.appendChild(unicodeSpan);
         };
         square.appendChild(img);
       }
+      
+      // Enable drop on squares with visual feedback
+      square.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        
+        // Use draggingFrom if available, otherwise use selected
+        const fromPos = draggingFrom || selected;
+        
+        if (fromPos && isLegalMove(fromPos, {row, col})) {
+          e.dataTransfer.dropEffect = 'move';
+          this.classList.add('drag-over');
+        } else {
+          e.dataTransfer.dropEffect = 'none';
+          this.classList.remove('drag-over');
+        }
+      });
+      
+      square.addEventListener('dragleave', function(e) {
+        this.classList.remove('drag-over');
+      });
+      
+      // Handle drop
+      square.addEventListener('drop', function(e) {
+        e.preventDefault();
+        this.classList.remove('drag-over');
+        
+        const data = e.dataTransfer.getData('text/plain');
+        if (!data) return;
+        
+        const [fromRow, fromCol] = data.split(',').map(Number);
+        const from = {row: fromRow, col: fromCol};
+        const to = {row, col};
+        
+        // Use existing move logic
+        handleDragAndDrop(from, to);
+      });
       
       square.addEventListener('click', () => onSquareClick(row, col));
       boardElement.appendChild(square);
