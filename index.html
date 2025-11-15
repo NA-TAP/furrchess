@@ -7,7 +7,72 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <h1>Furr Chess</h1>
+  <div id="header-container" style="display: flex; justify-content: space-between; align-items: center; width: 100%; max-width: 1200px; padding: 0 20px;">
+    <h1 style="margin: 24px 0 16px 0;">Furr Chess</h1>
+    <div id="user-section" style="display: flex; align-items: center; gap: 15px;">
+      <span id="user-display" style="display: none; font-family: 'Minecraftia', 'Press Start 2P', 'Courier New', Courier, monospace; font-size: 12px; color: #3e3e3e;"></span>
+      <button id="export-data-btn" class="auth-button" title="Export account data to text file">📥 Export Data</button>
+      <button id="import-data-btn" class="auth-button" title="Import account data from text file">📤 Import Data</button>
+      <input type="file" id="import-file-input" accept=".txt" multiple style="display: none;">
+      <button id="delete-account-btn" style="display: none;" class="auth-button delete-button" title="Delete your account">🗑️ Delete Account</button>
+      <button id="logout-btn" style="display: none;" class="auth-button">Logout</button>
+      <button id="login-btn" class="auth-button">Login</button>
+      <button id="signup-btn" class="auth-button">Sign Up</button>
+    </div>
+  </div>
+  
+  <!-- Login/Signup Modal -->
+  <div id="auth-modal" class="auth-modal" style="display: none;">
+    <div class="auth-modal-content">
+      <span class="auth-close" id="auth-close">&times;</span>
+      <div id="auth-tabs" class="auth-tabs">
+        <button class="auth-tab active" data-tab="login">Login</button>
+        <button class="auth-tab" data-tab="signup">Sign Up</button>
+      </div>
+      
+      <!-- Login Form -->
+      <div id="login-form" class="auth-form active">
+        <h2>Login</h2>
+        <div id="login-error" class="auth-error" style="display: none;"></div>
+        <form id="login-form-element">
+          <div class="auth-form-group">
+            <label for="login-username">Username</label>
+            <input type="text" id="login-username" required>
+          </div>
+          <div class="auth-form-group">
+            <label for="login-password">Password</label>
+            <input type="password" id="login-password" required>
+          </div>
+          <button type="submit" class="auth-submit-btn">Login</button>
+        </form>
+      </div>
+      
+      <!-- Signup Form -->
+      <div id="signup-form" class="auth-form" style="display: none;">
+        <h2>Sign Up</h2>
+        <div id="signup-error" class="auth-error" style="display: none;"></div>
+        <form id="signup-form-element">
+          <div class="auth-form-group">
+            <label for="signup-username">Username</label>
+            <input type="text" id="signup-username" required minlength="3" maxlength="20">
+          </div>
+          <div class="auth-form-group">
+            <label for="signup-email">Email</label>
+            <input type="email" id="signup-email" required>
+          </div>
+          <div class="auth-form-group">
+            <label for="signup-password">Password</label>
+            <input type="password" id="signup-password" required minlength="6">
+          </div>
+          <div class="auth-form-group">
+            <label for="signup-confirm-password">Confirm Password</label>
+            <input type="password" id="signup-confirm-password" required>
+          </div>
+          <button type="submit" class="auth-submit-btn">Sign Up</button>
+        </form>
+      </div>
+    </div>
+  </div>
   
   <!-- Selection Menu -->
   <div id="selection-menu" class="menu-container">
@@ -28,7 +93,7 @@
         <img src="ui assets/analysis.png" alt="Analysis" class="menu-icon">
         <span class="menu-text">Manual Analysis</span>
       </div>
-;      <div class="menu-item" data-mode="board-editor">
+      <div class="menu-item" data-mode="board-editor">
         <img src="ui assets/boardeditor.png" alt="Board Editor" class="menu-icon">
         <span class="menu-text">Board Editor</span>
       </div>

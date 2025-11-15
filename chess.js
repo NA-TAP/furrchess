@@ -3481,3 +3481,613 @@ function generatePuzzle() {
     }
   }
 }
+
+// ----- Authentication Functions -----
+let currentUser = null;
+
+// Initialize authentication
+function initializeAuth() {
+  // Check if user is already logged in
+  const savedUser = localStorage.getItem('currentUser');
+  if (savedUser) {
+    currentUser = JSON.parse(savedUser);
+    updateAuthUI();
+  }
+  
+  // Setup modal event listeners
+  const authModal = document.getElementById('auth-modal');
+  const loginBtn = document.getElementById('login-btn');
+  const signupBtn = document.getElementById('signup-btn');
+  const logoutBtn = document.getElementById('logout-btn');
+  const authClose = document.getElementById('auth-close');
+  
+  // Login button click
+  if (loginBtn) {
+    loginBtn.addEventListener('click', () => {
+      showAuthModal('login');
+    });
+  }
+  
+  // Signup button click
+  if (signupBtn) {
+    signupBtn.addEventListener('click', () => {
+      showAuthModal('signup');
+    });
+  }
+  
+  // Logout button click
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', logout);
+  }
+  
+  // Delete account button click
+  const deleteAccountBtn = document.getElementById('delete-account-btn');
+  if (deleteAccountBtn) {
+    deleteAccountBtn.addEventListener('click', deleteAccount);
+  }
+  
+  // Export data button click
+  const exportDataBtn = document.getElementById('export-data-btn');
+  if (exportDataBtn) {
+    exportDataBtn.addEventListener('click', exportDataToFile);
+  }
+  
+  // Import data button click
+  const importDataBtn = document.getElementById('import-data-btn');
+  const importFileInput = document.getElementById('import-file-input');
+  if (importDataBtn && importFileInput) {
+    importDataBtn.addEventListener('click', () => {
+      importFileInput.click();
+    });
+    importFileInput.addEventListener('change', handleFileImport);
+  }
+  
+  // Close modal button
+  if (authClose) {
+    authClose.addEventListener('click', closeAuthModal);
+  }
+  
+  // Close modal when clicking outside
+  if (authModal) {
+    authModal.addEventListener('click', (e) => {
+      if (e.target === authModal) {
+        closeAuthModal();
+      }
+    });
+  }
+  
+  // Tab switching
+  const authTabs = document.querySelectorAll('.auth-tab');
+  authTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const tabType = tab.dataset.tab;
+      switchAuthTab(tabType);
+    });
+  });
+  
+  // Form submissions
+  const loginForm = document.getElementById('login-form-element');
+  const signupForm = document.getElementById('signup-form-element');
+  
+  if (loginForm) {
+    loginForm.addEventListener('submit', handleLogin);
+  }
+  
+  if (signupForm) {
+    signupForm.addEventListener('submit', handleSignup);
+  }
+}
+
+// Show authentication modal
+function showAuthModal(type = 'login') {
+  const authModal = document.getElementById('auth-modal');
+  if (!authModal) return;
+  
+  authModal.style.display = 'block';
+  switchAuthTab(type);
+}
+
+// Close authentication modal
+function closeAuthModal() {
+  const authModal = document.getElementById('auth-modal');
+  if (!authModal) return;
+  
+  authModal.style.display = 'none';
+  
+  // Clear form errors
+  const loginError = document.getElementById('login-error');
+  const signupError = document.getElementById('signup-error');
+  if (loginError) loginError.style.display = 'none';
+  if (signupError) signupError.style.display = 'none';
+  
+  // Clear form fields
+  const loginForm = document.getElementById('login-form-element');
+  const signupForm = document.getElementById('signup-form-element');
+  if (loginForm) loginForm.reset();
+  if (signupForm) signupForm.reset();
+}
+
+// Switch between login and signup tabs
+function switchAuthTab(type) {
+  const loginForm = document.getElementById('login-form');
+  const signupForm = document.getElementById('signup-form');
+  const loginTab = document.querySelector('.auth-tab[data-tab="login"]');
+  const signupTab = document.querySelector('.auth-tab[data-tab="signup"]');
+  
+  if (type === 'login') {
+    if (loginForm) loginForm.style.display = 'block';
+    if (signupForm) signupForm.style.display = 'none';
+    if (loginTab) loginTab.classList.add('active');
+    if (signupTab) signupTab.classList.remove('active');
+  } else {
+    if (loginForm) loginForm.style.display = 'none';
+    if (signupForm) signupForm.style.display = 'block';
+    if (loginTab) loginTab.classList.remove('active');
+    if (signupTab) signupTab.classList.add('active');
+  }
+  
+  // Clear errors when switching tabs
+  const loginError = document.getElementById('login-error');
+  const signupError = document.getElementById('signup-error');
+  if (loginError) loginError.style.display = 'none';
+  if (signupError) signupError.style.display = 'none';
+}
+
+// Handle signup form submission
+function handleSignup(e) {
+  e.preventDefault();
+  
+  const username = document.getElementById('signup-username').value.trim();
+  const email = document.getElementById('signup-email').value.trim();
+  const password = document.getElementById('signup-password').value;
+  const confirmPassword = document.getElementById('signup-confirm-password').value;
+  const errorDiv = document.getElementById('signup-error');
+  
+  // Validation
+  if (username.length < 3) {
+    showError('signup-error', 'Username must be at least 3 characters long');
+    return;
+  }
+  
+  if (password.length < 6) {
+    showError('signup-error', 'Password must be at least 6 characters long');
+    return;
+  }
+  
+  if (password !== confirmPassword) {
+    showError('signup-error', 'Passwords do not match');
+    return;
+  }
+  
+  // Check if username already exists
+  const users = JSON.parse(localStorage.getItem('chessUsers') || '[]');
+  const existingUser = users.find(u => u.username.toLowerCase() === username.toLowerCase());
+  
+  if (existingUser) {
+    showError('signup-error', 'Username already exists');
+    return;
+  }
+  
+  // Check if email already exists
+  const existingEmail = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+  if (existingEmail) {
+    showError('signup-error', 'Email already registered');
+    return;
+  }
+  
+  // Create new user (in a real app, password would be hashed)
+  const newUser = {
+    id: Date.now().toString(),
+    username: username,
+    email: email,
+    password: password, // In production, this should be hashed!
+    createdAt: new Date().toISOString()
+  };
+  
+  users.push(newUser);
+  localStorage.setItem('chessUsers', JSON.stringify(users));
+  
+  // Save user to separate txt file in userdata folder
+  saveUserToFile(newUser);
+  
+  // Auto-login after signup
+  currentUser = {
+    id: newUser.id,
+    username: newUser.username,
+    email: newUser.email
+  };
+  localStorage.setItem('currentUser', JSON.stringify(currentUser));
+  
+  // Update UI and close modal
+  updateAuthUI();
+  showSuccess('signup-error', 'Account created successfully!');
+  
+  setTimeout(() => {
+    closeAuthModal();
+  }, 1000);
+}
+
+// Handle login form submission
+function handleLogin(e) {
+  e.preventDefault();
+  
+  const username = document.getElementById('login-username').value.trim();
+  const password = document.getElementById('login-password').value;
+  
+  // Get users from localStorage
+  const users = JSON.parse(localStorage.getItem('chessUsers') || '[]');
+  
+  // Find user by username
+  const user = users.find(u => 
+    u.username.toLowerCase() === username.toLowerCase() && 
+    u.password === password // In production, compare hashed passwords!
+  );
+  
+  if (!user) {
+    showError('login-error', 'Invalid username or password');
+    return;
+  }
+  
+  // Set current user
+  currentUser = {
+    id: user.id,
+    username: user.username,
+    email: user.email
+  };
+  localStorage.setItem('currentUser', JSON.stringify(currentUser));
+  
+  // Update UI and close modal
+  updateAuthUI();
+  closeAuthModal();
+}
+
+// Logout function
+function logout() {
+  currentUser = null;
+  localStorage.removeItem('currentUser');
+  updateAuthUI();
+}
+
+// Delete account function with confirmation
+function deleteAccount() {
+  if (!currentUser) {
+    alert('No user logged in.');
+    return;
+  }
+  
+  // First confirmation
+  const firstConfirm = confirm(
+    `⚠️ WARNING: This will permanently delete your account!\n\n` +
+    `Username: ${currentUser.username}\n` +
+    `Email: ${currentUser.email}\n\n` +
+    `This action cannot be undone.\n\n` +
+    `Are you sure you want to delete your account?`
+  );
+  
+  if (!firstConfirm) return;
+  
+  // Second confirmation (double confirmation for safety)
+  const secondConfirm = confirm(
+    `⚠️ FINAL WARNING ⚠️\n\n` +
+    `You are about to permanently delete your account: "${currentUser.username}"\n\n` +
+    `This will:\n` +
+    `• Delete your account from the system\n` +
+    `• Remove all your account data\n` +
+    `• Log you out immediately\n\n` +
+    `THIS CANNOT BE UNDONE!\n\n` +
+    `Type "DELETE" to confirm:`
+  );
+  
+  if (!secondConfirm) return;
+  
+  // For extra safety, ask user to type DELETE
+  const deleteConfirm = prompt(
+    `⚠️ FINAL CONFIRMATION ⚠️\n\n` +
+    `Type "DELETE" (all caps) to permanently delete your account "${currentUser.username}":`
+  );
+  
+  if (deleteConfirm !== 'DELETE') {
+    alert('Account deletion cancelled. Your account is safe.');
+    return;
+  }
+  
+  try {
+    // Get all users
+    const users = JSON.parse(localStorage.getItem('chessUsers') || '[]');
+    
+    // Find and remove the user
+    const userIndex = users.findIndex(u => u.id === currentUser.id || 
+                                           u.username.toLowerCase() === currentUser.username.toLowerCase());
+    
+    if (userIndex !== -1) {
+      users.splice(userIndex, 1);
+      localStorage.setItem('chessUsers', JSON.stringify(users));
+    }
+    
+    // Remove current user session
+    localStorage.removeItem('currentUser');
+    currentUser = null;
+    
+    // Update UI
+    updateAuthUI();
+    
+    // Show success message
+    alert('Account deleted successfully. You have been logged out.');
+    
+    // If user is in a game, go back to menu
+    if (gameContainer && gameContainer.style.display !== 'none') {
+      showMenu();
+    }
+    
+  } catch (error) {
+    console.error('Error deleting account:', error);
+    alert('Error deleting account: ' + error.message);
+  }
+}
+
+// Update authentication UI based on login state
+function updateAuthUI() {
+  const userDisplay = document.getElementById('user-display');
+  const loginBtn = document.getElementById('login-btn');
+  const signupBtn = document.getElementById('signup-btn');
+  const logoutBtn = document.getElementById('logout-btn');
+  const deleteAccountBtn = document.getElementById('delete-account-btn');
+  
+  if (currentUser) {
+    // User is logged in
+    if (userDisplay) {
+      userDisplay.textContent = `👤 ${currentUser.username}`;
+      userDisplay.style.display = 'inline';
+    }
+    if (loginBtn) loginBtn.style.display = 'none';
+    if (signupBtn) signupBtn.style.display = 'none';
+    if (logoutBtn) logoutBtn.style.display = 'inline-block';
+    if (deleteAccountBtn) deleteAccountBtn.style.display = 'inline-block';
+  } else {
+    // User is not logged in
+    if (userDisplay) userDisplay.style.display = 'none';
+    if (loginBtn) loginBtn.style.display = 'inline-block';
+    if (signupBtn) signupBtn.style.display = 'inline-block';
+    if (logoutBtn) logoutBtn.style.display = 'none';
+    if (deleteAccountBtn) deleteAccountBtn.style.display = 'none';
+  }
+}
+
+// Show error message
+function showError(errorId, message) {
+  const errorDiv = document.getElementById(errorId);
+  if (errorDiv) {
+    errorDiv.textContent = message;
+    errorDiv.style.display = 'block';
+    errorDiv.className = 'auth-error';
+  }
+}
+
+// Show success message
+function showSuccess(errorId, message) {
+  const errorDiv = document.getElementById(errorId);
+  if (errorDiv) {
+    errorDiv.textContent = message;
+    errorDiv.style.display = 'block';
+    errorDiv.className = 'auth-success';
+  }
+}
+
+// Save a single user to a separate txt file in userdata folder
+function saveUserToFile(user) {
+  try {
+    // Format user data as text
+    let textContent = '=== FURR CHESS USER ACCOUNT ===\n\n';
+    textContent += `Export Date: ${new Date().toLocaleString()}\n\n`;
+    textContent += `ID: ${user.id}\n`;
+    textContent += `Username: ${user.username}\n`;
+    textContent += `Email: ${user.email}\n`;
+    textContent += `Password: ${user.password}\n`;
+    textContent += `Created At: ${user.createdAt}\n`;
+    
+    // Create blob and download
+    const blob = new Blob([textContent], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    // Use userdata/ prefix in filename so users can save to userdata folder
+    const safeUsername = user.username.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    a.download = `userdata/${safeUsername}-${user.id}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error('Error saving user file:', error);
+    // Don't show error to user, just log it
+  }
+}
+
+// Export all account data as separate txt files in userdata folder
+function exportDataToFile() {
+  try {
+    const users = JSON.parse(localStorage.getItem('chessUsers') || '[]');
+    
+    if (users.length === 0) {
+      alert('No account data to export.');
+      return;
+    }
+    
+    // Confirm export
+    const confirmed = confirm(
+      `This will download ${users.length} separate text file(s) to the userdata folder.\n\n` +
+      `Please create a "userdata" folder in your Downloads directory first if it doesn't exist.\n\n` +
+      `Continue?`
+    );
+    
+    if (!confirmed) return;
+    
+    // Save each user as a separate file with delay between downloads
+    let delay = 0;
+    users.forEach((user, index) => {
+      setTimeout(() => {
+        saveUserToFile(user);
+        if (index === users.length - 1) {
+          // Last file, show success message
+          setTimeout(() => {
+            alert(`Account data exported successfully!\n\n` +
+                  `Downloaded ${users.length} user file(s).\n` +
+                  `Please save them to the "userdata" folder.`);
+          }, 500);
+        }
+      }, delay);
+      delay += 300; // 300ms delay between each download
+    });
+    
+  } catch (error) {
+    console.error('Error exporting data:', error);
+    alert('Error exporting data: ' + error.message);
+  }
+}
+
+// Handle file import for account data (single file or multiple files)
+function handleFileImport(event) {
+  const files = event.target.files;
+  if (!files || files.length === 0) return;
+  
+  let filesToProcess = Array.from(files);
+  
+  // Filter for .txt files
+  filesToProcess = filesToProcess.filter(file => file.name.endsWith('.txt'));
+  
+  if (filesToProcess.length === 0) {
+    alert('Please select .txt file(s) from the userdata folder.');
+    return;
+  }
+  
+  // Ask for confirmation
+  const confirmed = confirm(
+    `Found ${filesToProcess.length} file(s) to import.\n\n` +
+    `This will add these users to your existing data.\n` +
+    `Continue?`
+  );
+  
+  if (!confirmed) {
+    event.target.value = '';
+    return;
+  }
+  
+  let processedCount = 0;
+  let added = 0;
+  let skipped = 0;
+  const existingUsers = JSON.parse(localStorage.getItem('chessUsers') || '[]');
+  const existingUsernames = new Set(existingUsers.map(u => u.username.toLowerCase()));
+  const existingEmails = new Set(existingUsers.map(u => u.email.toLowerCase()));
+  
+  // Process each file
+  filesToProcess.forEach((file, index) => {
+    const reader = new FileReader();
+    
+    reader.onload = function(e) {
+      try {
+        const content = e.target.result;
+        
+        // Parse user data from text format
+        const importedUser = parseUserFromText(content);
+        
+        if (!importedUser || !importedUser.username) {
+          skipped++;
+          processedCount++;
+          checkComplete();
+          return;
+        }
+        
+        // Validate user structure
+        if (!importedUser.email || !importedUser.password) {
+          skipped++;
+          processedCount++;
+          checkComplete();
+          return;
+        }
+        
+        // Check for duplicates
+        if (existingUsernames.has(importedUser.username.toLowerCase()) || 
+            existingEmails.has(importedUser.email.toLowerCase())) {
+          skipped++;
+          processedCount++;
+          checkComplete();
+          return;
+        }
+        
+        // Add user
+        existingUsernames.add(importedUser.username.toLowerCase());
+        existingEmails.add(importedUser.email.toLowerCase());
+        existingUsers.push(importedUser);
+        added++;
+        processedCount++;
+        checkComplete();
+        
+      } catch (error) {
+        console.error(`Error processing file ${file.name}:`, error);
+        skipped++;
+        processedCount++;
+        checkComplete();
+      }
+    };
+    
+    reader.onerror = function() {
+      console.error(`Error reading file ${file.name}`);
+      skipped++;
+      processedCount++;
+      checkComplete();
+    };
+    
+    reader.readAsText(file);
+  });
+  
+  function checkComplete() {
+    if (processedCount === filesToProcess.length) {
+      // All files processed
+      localStorage.setItem('chessUsers', JSON.stringify(existingUsers));
+      
+      alert(
+        `Import complete!\n\n` +
+        `Processed: ${filesToProcess.length} file(s)\n` +
+        `Added: ${added} user(s)\n` +
+        `Skipped (duplicates/invalid): ${skipped} user(s)\n` +
+        `Total users now: ${existingUsers.length}`
+      );
+      
+      // Reset file input
+      event.target.value = '';
+    }
+  }
+}
+
+// Parse a single user from text format (for individual user files)
+function parseUserFromText(text) {
+  const user = {};
+  const lines = text.split('\n');
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    
+    // Parse user fields
+    if (line.startsWith('ID:')) {
+      user.id = line.substring(3).trim();
+    } else if (line.startsWith('Username:')) {
+      user.username = line.substring(9).trim();
+    } else if (line.startsWith('Email:')) {
+      user.email = line.substring(6).trim();
+    } else if (line.startsWith('Password:')) {
+      user.password = line.substring(9).trim();
+    } else if (line.startsWith('Created At:')) {
+      user.createdAt = line.substring(11).trim();
+    }
+  }
+  
+  return user.username ? user : null;
+}
+
+// Initialize authentication when page loads
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeAuth);
+} else {
+  initializeAuth();
+}
+
